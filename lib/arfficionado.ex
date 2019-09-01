@@ -1,4 +1,26 @@
 defmodule Arfficionado do
+  @moduledoc """
+  Reader for ARFF (Attribute Relation File Format) files.
+  TODO: link to arff
+  TODO: general usage idea
+  TODO: current limitations
+  TODO: use an official arff example file for illustrations...
+  """
+
+  @doc """
+  Reads a line `stream` that represents an ARFF file and invokes corresponding `handler` callbacks.
+  Maintains handler state, which is initialized to `initial_handler_state` and is modified by the callback invocations.
+
+ Returns `{:ok, final_handler_state}` if the stream was processed successfully, and {:error, reason} otherwise. The handler callback `close/1` is called in both cases. 
+
+
+  ## Examples
+
+      iex> File.stream!("my.arff")
+      ...> |> Arfficionado.read(Arfficionado.ListHandler, [])
+      {:ok, [{[v1_1, v1_2, v1_3], 1}, ... {[vn_1, vn_2, vn_3], 1}]}
+
+  """
   def read(stream, handler, initial_handler_state) do
     case Enum.reduce_while(stream, {handler, initial_handler_state, {[], false, 1}}, &process_line/2) do
       {_, {:error, reason, handler_state}, {_, _, line_number}} ->
