@@ -22,7 +22,7 @@ defmodule ErrorTest do
     def instance(_values, _weight, _comment, state), do: {:cont, state}
 
     @impl Handler
-    def close(state), do: state
+    def close(state), do: :closed
   end
 
   test "too few values" do
@@ -33,7 +33,7 @@ defmodule ErrorTest do
       @data
       1,2
       3 % one too few
-      """) == {:error, "Line 6: Fewer values than attributes.", nil}
+      """) == {:error, "Line 6: Fewer values than attributes.", :closed}
   end
 
   test "too many values" do
@@ -44,7 +44,7 @@ defmodule ErrorTest do
       @data
       1,2,3 % one too many
       3,4
-      """) == {:error, "Line 5: More values than attributes.", nil}
+      """) == {:error, "Line 5: More values than attributes.", :closed}
   end
 
   defp read(s) do
