@@ -1,11 +1,17 @@
 defmodule Arfficionado do
   def read(stream, handler, initial_handler_state) do
-    stream
-    |> Enum.reduce_while({handler, initial_handler_state, {[], false}}, &process_line/2)
-    |> elem(1)
-    |> handler.close()
+    case Enum.reduce_while(stream, {handler, initial_handler_state, {[], false}}, &process_line/2) do
+      {_, {:error, reason, handler_state}, _} ->
+        final_state = handler.close(handler_state)
+        {:error, reason, final_state}
+      {_, handler_state, _} ->
+        final_state = handler.close(handler_state)
+        {:ok, final_state}
+    end
   end
 
+  # + zeilennummer
+  # on parse error return {:error, reason, handler_state}; pass handler state into close; return error
   defp process_line(line, {handler, handler_state, {attributes, header_finished}}) do
     parsed =
       line
@@ -46,21 +52,35 @@ defmodule Arfficionado do
           end
 
         {:raw_instance, _, _, _} = ri when header_finished ->
-          {:instance, values, weight, comment} = cast(ri, attributes)
-          {coh, uhs} = handler.instance(values, weight, comment, handler_state)
-          {coh, uhs, {attributes, header_finished}}
+          case cast(ri, attributes) do
+            {:error, reason}  ->
+              halt_with_error(reason, handler, handler_state, {attributes, header_finished})
+
+            {:instance, values, weight, comment} -> 
+              {coh, uhs} = handler.instance(values, weight, comment, handler_state)
+              {coh, uhs, {attributes, header_finished}}
+          end
       end
 
     {cont_or_halt, {handler, updated_handler_state, updated_internal_state}}
   end
 
+  defp halt_with_error(reason, handler, handler_state, internal_state) do
+    # TODO: add report_error function to handler, call it .. or .. add flag to close
+    {:halt, {:error, reason, handler_state}, internal_state}
+  end
+
   def cast({:raw_instance, raw_values, weight, comment}, attributes) do
-    cast_values = cv(raw_values, attributes, [])
-    {:instance, cast_values, weight, comment}
+    case cv(raw_values, attributes, []) do
+      {:error, _reason} = err -> err
+      cast_values -> {:instance, cast_values, weight, comment}
+    end
   end
 
   defp cv([], [], acc), do: Enum.reverse(acc)
   defp cv([v | vs], [a | as], acc), do: cv(vs, as, [c(v, a) | acc])
+  defp cv([v | vs], [], _), do: {:error, "More values than attributes."}
+  defp cv([], [a | as], _), do: {:error, "Fewer values than attributes."}
 
   defp c(:missing, _), do: :missing
 
