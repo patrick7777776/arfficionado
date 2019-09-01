@@ -1,18 +1,17 @@
 defmodule Arfficionado do
   def read(stream, handler, initial_handler_state) do
-    case Enum.reduce_while(stream, {handler, initial_handler_state, {[], false}}, &process_line/2) do
-      {_, {:error, reason, handler_state}, _} ->
+    case Enum.reduce_while(stream, {handler, initial_handler_state, {[], false, 1}}, &process_line/2) do
+      {_, {:error, reason, handler_state}, {_, _, line_number}} ->
         final_state = handler.close(handler_state)
-        {:error, reason, final_state}
+        {:error, ~s"Line #{line_number}: #{reason}", final_state}
       {_, handler_state, _} ->
         final_state = handler.close(handler_state)
         {:ok, final_state}
     end
   end
 
-  # + zeilennummer
   # on parse error return {:error, reason, handler_state}; pass handler state into close; return error
-  defp process_line(line, {handler, handler_state, {attributes, header_finished}}) do
+  defp process_line(line, {handler, handler_state, {attributes, header_finished, line_number}}) do
     parsed =
       line
       |> tokenize()
@@ -21,20 +20,19 @@ defmodule Arfficionado do
     {cont_or_halt, updated_handler_state, updated_internal_state} =
       case parsed do
         :empty_line ->
-          # TODO: decide whether to abandon this echo-roundtrip idea...
-          {:cont, handler_state, {attributes, header_finished}}
+          {:cont, handler_state, {attributes, header_finished, line_number + 1}}
 
         {:comment, comment} ->
           {coh, uih} = handler.line_comment(comment, handler_state)
-          {coh, uih, {attributes, header_finished}}
+          {coh, uih, {attributes, header_finished, line_number + 1}}
 
         {:relation, name, comment} ->
           {coh, uih} = handler.relation(name, comment, handler_state)
-          {coh, uih, {attributes, header_finished}}
+          {coh, uih, {attributes, header_finished, line_number + 1}}
 
         {:attribute, _name, _type, _comment} = attribute when not header_finished ->
           # TODO: handle relational attributes!!!!
-          {:cont, handler_state, {[attribute | attributes], header_finished}}
+          {:cont, handler_state, {[attribute | attributes], header_finished, line_number + 1}}
 
         {:data, comment} ->
           finished_attributes = Enum.reverse(attributes)
@@ -44,21 +42,21 @@ defmodule Arfficionado do
 
           case cont_or_halt do
             :halt ->
-              {:halt, updated_handler_state, {finished_attributes, true}}
+              {:halt, updated_handler_state, {finished_attributes, true, line_number + 1}}
 
             :cont ->
               {coh, uhs} = handler.begin_data(comment, updated_handler_state)
-              {coh, uhs, {finished_attributes, true}}
+              {coh, uhs, {finished_attributes, true, line_number + 1}}
           end
 
         {:raw_instance, _, _, _} = ri when header_finished ->
           case cast(ri, attributes) do
             {:error, reason}  ->
-              halt_with_error(reason, handler, handler_state, {attributes, header_finished})
+              halt_with_error(reason, handler, handler_state, {attributes, header_finished, line_number })
 
             {:instance, values, weight, comment} -> 
               {coh, uhs} = handler.instance(values, weight, comment, handler_state)
-              {coh, uhs, {attributes, header_finished}}
+              {coh, uhs, {attributes, header_finished, line_number + 1}}
           end
       end
 
