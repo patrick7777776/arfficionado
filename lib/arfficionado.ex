@@ -1,24 +1,24 @@
 defmodule Arfficionado do
   @moduledoc """
-  Reader for ARFF (Attribute Relation File Format) files.
-  TODO: link to arff
-  TODO: general usage idea
-  TODO: current limitations
-  TODO: use an official arff example file for illustrations...
+    Reader for ARFF (Attribute Relation File Format) files.
+    TODO: link to arff
+    TODO: general usage idea
+    TODO: current limitations
+    TODO: use an official arff example file for illustrations...
   """
 
   @doc """
-  Reads a line `stream` that represents an ARFF file and invokes corresponding `handler` callbacks.
-  Maintains handler state, which is initialized to `initial_handler_state` and is modified by the callback invocations.
+    Reads a line `stream` that represents an ARFF file and invokes corresponding `handler` callbacks.
+    Maintains handler state, which is initialized to `initial_handler_state` and is modified by the callback invocations.
 
- Returns `{:ok, final_handler_state}` if the stream was processed successfully, and {:error, reason} otherwise. The handler callback `close/1` is called in both cases. 
+   Returns `{:ok, final_handler_state}` if the stream was processed successfully, and `{:error, reason}` otherwise. The handler callback `c:close/1` is called in both cases. 
 
 
-  ## Examples
+    ## Examples
 
-      iex> File.stream!("my.arff")
-      ...> |> Arfficionado.read(Arfficionado.ListHandler, [])
-      {:ok, [{[v1_1, v1_2, v1_3], 1}, ... {[vn_1, vn_2, vn_3], 1}]}
+        iex> File.stream!("my.arff")
+        ...> |> Arfficionado.read(Arfficionado.ListHandler, [])
+        {:ok, [{[v1_1, v1_2, v1_3], 1}, ... {[vn_1, vn_2, vn_3], 1}]}
 
   """
   def read(stream, handler, initial_handler_state) do
@@ -90,6 +90,7 @@ defmodule Arfficionado do
     {:halt, {:error, reason, handler_state}, internal_state}
   end
 
+  @doc false
   def cast({:raw_instance, raw_values, weight, comment}, attributes) do
     case cv(raw_values, attributes, []) do
       {:error, _reason} = err -> err
@@ -150,6 +151,7 @@ defmodule Arfficionado do
     dt
   end
 
+  @doc false
   def parse([:line_break]), do: :empty_line
 
   def parse([{:comment, comment} = cmt]), do: cmt
@@ -222,6 +224,7 @@ defmodule Arfficionado do
   defp value({:string, v}), do: v
   defp value(:missing), do: :missing
 
+  @doc false
   def tokenize(line) do
     line
     |> t([])
