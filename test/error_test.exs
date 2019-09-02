@@ -25,7 +25,36 @@ defmodule ErrorTest do
     def close(state), do: :closed
   end
 
-  test "too few values" do
+  test "@relation expected" do
+    assert read(~s"""
+      % missing @relation
+      @attribute a1 integer
+      @attribute a2 integer
+      @data
+      1,2
+      """) == {:error, "Line 2: Expected @relation.", :closed}
+  end
+
+  test "@attribute expected" do
+    assert read(~s"""
+      @relation foo
+      % missing @attribute
+      @data
+      1,2
+      """) == {:error, "Line 3: Expected @attribute.", :closed}
+  end
+
+  test "@data expected" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @attribute a2 integer
+      % missing @data
+      1,2
+      """) == {:error, "Line 5: Expected @attribute or @data.", :closed}
+  end
+
+  test "instance: too few values" do
     assert read(~s"""
       @relation foo
       @attribute a1 integer
@@ -36,7 +65,7 @@ defmodule ErrorTest do
       """) == {:error, "Line 6: Fewer values than attributes.", :closed}
   end
 
-  test "too many values" do
+  test "instance: too many values" do
     assert read(~s"""
       @relation foo
       @attribute a1 integer

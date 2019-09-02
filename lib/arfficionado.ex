@@ -22,8 +22,8 @@ defmodule Arfficionado do
 
   """
   def read(stream, handler, initial_handler_state) do
-    case Enum.reduce_while(stream, {handler, initial_handler_state, {[], false, 1}}, &process_line/2) do
-      {_, {:error, reason, handler_state}, {_, _, line_number}} ->
+    case Enum.reduce_while(stream, {handler, initial_handler_state, {:"@relation", [], false, 1}}, &process_line/2) do
+      {_, {:error, reason, handler_state}, {_, _, _, line_number}} ->
         final_state = handler.close(handler_state)
         {:error, ~s"Line #{line_number}: #{reason}", final_state}
       {_, handler_state, _} ->
@@ -32,8 +32,9 @@ defmodule Arfficionado do
     end
   end
 
-  # on parse error return {:error, reason, handler_state}; pass handler state into close; return error
-  defp process_line(line, {handler, handler_state, {attributes, header_finished, line_number}}) do
+  # TODO: clean up that internal state and its handling; add a state-machine that detects deviations from arff spec (missing header, duplicates, wrong order, ...)
+  # TODO: remove header_finished 
+  defp process_line(line, {handler, handler_state, {stage, attributes, header_finished, line_number}}) do
     parsed =
       line
       |> tokenize()
@@ -42,21 +43,21 @@ defmodule Arfficionado do
     {cont_or_halt, updated_handler_state, updated_internal_state} =
       case parsed do
         :empty_line ->
-          {:cont, handler_state, {attributes, header_finished, line_number + 1}}
+          {:cont, handler_state, {stage, attributes, header_finished, line_number + 1}}
 
         {:comment, comment} ->
           {coh, uih} = handler.line_comment(comment, handler_state)
-          {coh, uih, {attributes, header_finished, line_number + 1}}
+          {coh, uih, {stage, attributes, header_finished, line_number + 1}}
 
-        {:relation, name, comment} ->
+        {:relation, name, comment} when stage == :"@relation" ->
           {coh, uih} = handler.relation(name, comment, handler_state)
-          {coh, uih, {attributes, header_finished, line_number + 1}}
+          {coh, uih, {:"@attribute", attributes, header_finished, line_number + 1}}
 
-        {:attribute, _name, _type, _comment} = attribute when not header_finished ->
+        {:attribute, _name, _type, _comment} = attribute when stage == :"@attribute" or stage == :"@attribute or @data" ->
           # TODO: handle relational attributes!!!!
-          {:cont, handler_state, {[attribute | attributes], header_finished, line_number + 1}}
+          {:cont, handler_state, {:"@attribute or @data", [attribute | attributes], header_finished, line_number + 1}}
 
-        {:data, comment} ->
+        {:data, comment} when length(attributes) > 0 and stage == :"@attribute or @data" ->
           finished_attributes = Enum.reverse(attributes)
 
           {cont_or_halt, updated_handler_state} =
@@ -64,22 +65,26 @@ defmodule Arfficionado do
 
           case cont_or_halt do
             :halt ->
-              {:halt, updated_handler_state, {finished_attributes, true, line_number + 1}}
+              {:halt, updated_handler_state, {:halt, finished_attributes, true, line_number + 1}}
 
             :cont ->
               {coh, uhs} = handler.begin_data(comment, updated_handler_state)
-              {coh, uhs, {finished_attributes, true, line_number + 1}}
+              {coh, uhs, {:instance, finished_attributes, true, line_number + 1}}
           end
 
-        {:raw_instance, _, _, _} = ri when header_finished ->
+        {:raw_instance, _, _, _} = ri when stage == :instance ->
           case cast(ri, attributes) do
             {:error, reason}  ->
-              halt_with_error(reason, handler, handler_state, {attributes, header_finished, line_number })
+              halt_with_error(reason, handler, handler_state, {:halt, attributes, header_finished, line_number })
 
             {:instance, values, weight, comment} -> 
               {coh, uhs} = handler.instance(values, weight, comment, handler_state)
-              {coh, uhs, {attributes, header_finished, line_number + 1}}
+              {coh, uhs, {:instance, attributes, header_finished, line_number + 1}}
           end
+
+        _ ->
+          halt_with_error(~s"Expected #{Atom.to_string(stage)}.", handler, handler_state, {:halt, attributes, header_finished, line_number })
+
       end
 
     {cont_or_halt, {handler, updated_handler_state, updated_internal_state}}
