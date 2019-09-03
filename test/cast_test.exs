@@ -30,15 +30,11 @@ defmodule CastTest do
   end
 
   test "cast unexpected nominal value" do
-    assert_raise ArgumentError, fn ->
-      cast({:raw_instance, ["a"], 2, nil}, [{:attribute, "name", {:nominal, ["b", "c"]}, nil}])
-    end
+    assert cast({:raw_instance, ["a"], 2, nil}, [{:attribute, "name", {:nominal, ["b", "c"]}, nil}]) == {:error, "Unexpected nominal value a for attribute name."}
   end
 
   test "cast unexpected numeric value" do
-    assert_raise MatchError, fn ->
-      cast({:raw_instance, ["a"], 2, nil}, [{:attribute, "name", :numeric, nil}])
-    end
+    assert cast({:raw_instance, ["a"], 2, nil}, [{:attribute, "name", :numeric, nil}]) == {:error, "Cannot cast a to integer/real for attribute name."}
   end
 
 end

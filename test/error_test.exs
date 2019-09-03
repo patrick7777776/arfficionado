@@ -33,6 +33,23 @@ defmodule ErrorTest do
       @data
       1,2
       """) == {:error, "Line 2: Expected @relation.", :closed}
+
+    assert read(~s"""
+      % missing @relation
+      @data
+      1,2
+      """) == {:error, "Line 2: Expected @relation.", :closed}
+
+    assert read(~s"""
+      % missing @relation
+      1,2
+      """) == {:error, "Line 2: Expected @relation.", :closed}
+
+    assert read(~s"""
+      % missing @relation
+      """) == {:error, "Line 2: Expected @relation.", :closed}
+
+    assert read("") == {:error, "Line 1: Expected @relation.", :closed}
   end
 
   test "@attribute expected" do
@@ -42,6 +59,22 @@ defmodule ErrorTest do
       @data
       1,2
       """) == {:error, "Line 3: Expected @attribute.", :closed}
+
+    assert read(~s"""
+      @relation foo
+      1,2
+      """) == {:error, "Line 2: Expected @attribute.", :closed}
+
+    assert read(~s"""
+      @relation foo
+      """) == {:error, "Line 2: Expected @attribute.", :closed}
+
+    assert read("@relation foo") == {:error, "Line 2: Expected @attribute.", :closed}
+
+    assert read(~s"""
+      @relation foo
+      @relation bar
+      """) == {:error, "Line 2: Expected @attribute.", :closed}
   end
 
   test "@data expected" do
@@ -52,6 +85,11 @@ defmodule ErrorTest do
       % missing @data
       1,2
       """) == {:error, "Line 5: Expected @attribute or @data.", :closed}
+
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      """) == {:error, "Line 3: Expected @attribute or @data.", :closed}
   end
 
   test "instance: too few values" do
@@ -76,6 +114,60 @@ defmodule ErrorTest do
       """) == {:error, "Line 5: More values than attributes.", :closed}
   end
 
+  test "instance: type error int-string" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @attribute a2 integer
+      @data
+      1, two
+      """) == {:error, "Line 5: Cannot cast two to integer/real for attribute a2.", :closed}
+  end
+
+  test "instance: type error real-string" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 real
+      @attribute a2 real
+      @data
+      1, two
+      """) == {:error, "Line 5: Cannot cast two to integer/real for attribute a2.", :closed}
+  end
+
+  test "instance: type error numeric-string" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 numeric
+      @attribute a2 numeric
+      @data
+      1, two
+      """) == {:error, "Line 5: Cannot cast two to integer/real for attribute a2.", :closed}
+  end
+
+  test "instance: type error nominal-unexpected" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @attribute a2 {yes, no}
+      @data
+      1, yes
+      2, no
+      3, maybe
+      """) == {:error, "Line 7: Unexpected nominal value maybe for attribute a2.", :closed}
+  end
+
+  test "instance: type error wrong format for ISO-8601 date" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @attribute a2 date
+      @data
+      1, 2018-06-03T10:38:28Z
+      2, 2019-09-03T10:38:28+00:00
+      3, 2012-10-05
+      """) == {:error, "Line 7: Cannot parse 2012-10-05 as ISO-8601 date for attribute a2.", :closed}
+  end
+
   defp read(s) do
     {:ok, stream} = StringIO.open(s)
     stream
@@ -83,16 +175,8 @@ defmodule ErrorTest do
     |> read(ETHandler, nil)
   end
 
-  # {:error, reason} | {:ok, state}
-  #
-
-  # missing header parts -- complain
-  # duplicated header parts; repeated header parts; ...
-  # too many / too few values -- line no + good message
-  # cast errors: value with wrong type
-  # 
-
-  # when error is encountered, must still call close() !
-
+  # leniency tests: float in int column; float: missing -0 , missing 0
+  # extra [1-20] int ranges @attribute
+  # no commas, just spaces
 
 end

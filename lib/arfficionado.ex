@@ -1,4 +1,8 @@
 defmodule Arfficionado do
+
+  # make sure that each parse path has an error-catch-all (via tests)
+  # do we need to wrap a try catch around this at the top level to ensure that no unexpected error is actually raised?!
+
   @moduledoc """
     Reader for ARFF (Attribute Relation File Format) files.
     TODO: link to arff
@@ -11,7 +15,7 @@ defmodule Arfficionado do
     Reads a line `stream` that represents an ARFF file and invokes corresponding `handler` callbacks.
     Maintains handler state, which is initialized to `initial_handler_state` and is modified by the callback invocations.
 
-   Returns `{:ok, final_handler_state}` if the stream was processed successfully, and `{:error, reason}` otherwise. The handler callback `c:close/1` is called in both cases. 
+   Returns `{:ok, final_handler_state}` if the stream was processed successfully, and `{:error, reason, final_handler_state}` otherwise. The handler callback `c:close/1` is called in both cases. 
 
 
     ## Examples
@@ -26,6 +30,9 @@ defmodule Arfficionado do
       {_, {:error, reason, handler_state}, {_, _, _, line_number}} ->
         final_state = handler.close(handler_state)
         {:error, ~s"Line #{line_number}: #{reason}", final_state}
+      {_, handler_state, {stage, _, _, line_number}} when stage != :instance ->
+        final_state = handler.close(handler_state)
+        {:error, ~s"Line #{line_number}: Expected #{Atom.to_string(stage)}.", final_state} # error msg assembly somewhat duplicated
       {_, handler_state, _} ->
         final_state = handler.close(handler_state)
         {:ok, final_state}
@@ -104,39 +111,53 @@ defmodule Arfficionado do
   end
 
   defp cv([], [], acc), do: Enum.reverse(acc)
-  defp cv([v | vs], [a | as], acc), do: cv(vs, as, [c(v, a) | acc])
+  defp cv([v | vs], [a | as], acc) do
+    case c(v, a) do
+      {:error, _reason} = err -> 
+        err
+      cast_value -> 
+        cv(vs, as, [cast_value | acc])
+    end
+  end
   defp cv([v | vs], [], _), do: {:error, "More values than attributes."}
   defp cv([], [a | as], _), do: {:error, "Fewer values than attributes."}
 
   defp c(:missing, _), do: :missing
 
-  defp c(v, {:attribute, _, :integer, _}) do
+  # integer, float, numeric are all the same to ARFF, so simplify all of this code! Consider making integer/real into numeric and having one numeric case that adds missing -0 / 0 and first tries int then float...
+  defp c(v, {:attribute, name, :integer, _}) do
     case Integer.parse(v) do
       {i, ""} -> i
       _ ->
         # be lenient -- some files have float values in an int column
-        {f, ""} = Float.parse(v)
-        f
+        case Float.parse(v) do
+          {f, ""} -> f
+          :error -> {:error, ~s"Cannot cast #{v} to integer/real for attribute #{name}."}
+        end
     end
   end
 
   defp c("." <> v, {:attribute, _, type, _} = att) when type == :real or type == :numeric, do: c("0." <> v, att)
   defp c("-." <> v, {:attribute, _, type, _} = att) when type == :real or type == :numeric, do: c("-0." <> v, att)
 
-  defp c(v, {:attribute, _, :real, _}) do
+  defp c(v, {:attribute, name, :real, _}) do
     case Float.parse(v) do
       {f, ""} -> f
+      :error -> {:error, ~s"Cannot cast #{v} to integer/real for attribute #{name}."}
     end
   end
 
-  defp c(v, {:attribute, _, :numeric, _}) do
+  #TODO: duplication with integer case
+  defp c(v, {:attribute, name, :numeric, _}) do
     case Integer.parse(v) do
       {i, ""} ->
         i
 
       _ ->
-        {f, ""} = Float.parse(v)
-        f
+        case Float.parse(v) do
+          {f, ""} -> f
+          :error -> {:error, ~s"Cannot cast #{v} to integer/real for attribute #{name}."}
+        end
     end
   end
 
@@ -145,15 +166,17 @@ defmodule Arfficionado do
     if v in enum do
       String.to_atom(v)
     else
-      raise ArgumentError, ~s"attribute #{name} unexpected nominal value: #{v}"
+      {:error, ~s"Unexpected nominal value #{v} for attribute #{name}."}
     end
   end
 
   defp c(v, {:attribute, _, :string, _}), do: v
 
-  defp c(v, {:attribute, _, {:date, :iso_8601}, _}) do
-    {:ok, dt, _} = DateTime.from_iso8601(v)
-    dt
+  defp c(v, {:attribute, name, {:date, :iso_8601}, _}) do
+    case DateTime.from_iso8601(v) do
+      {:ok, dt, _} -> dt
+      {:error, :invalid_format} -> {:error, ~s"Cannot parse #{v} as ISO-8601 date for attribute #{name}."}
+    end
   end
 
   @doc false
