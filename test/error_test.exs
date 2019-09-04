@@ -223,7 +223,7 @@ defmodule ErrorTest do
       @attribute a1 integer, which must be a prime
       @data
       1
-      """) == {:error, "Line 3: ", :closed}
+      """) == {:error, "Line 2: Unexpected: [:comma, {:string, \"which\"}, {:string, \"must\"}, {:string, \"be\"}, {:string, \"a\"}, {:string, \"prime\"}, :line_break]", :closed}
   end
 
   test "@data followed by unexpected tokens" do
@@ -231,9 +231,9 @@ defmodule ErrorTest do
       @relation foo
       @attribute a1 integer
       @attribute a2 integer
-      @data schmata I like my theory
+      @data schmata
       1, 2
-      """) == {:error, "Line 4: ", :closed}
+      """) == {:error, "Line 4: Unexpected: [{:string, \"schmata\"}, :line_break]", :closed}
   end
 
   # same attribute name given twice!

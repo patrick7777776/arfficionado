@@ -177,7 +177,11 @@ defmodule Arfficionado do
       "@relation" -> parse_relation(rest)
       "@attribute" -> parse_attribute(rest)
       "@end" -> parse_end(rest)
-      "@data" -> {:data, parse_optional_comment(rest)}
+      "@data" ->
+        case parse_optional_comment(rest) do # TODO: this is going to be repeated x times! Is there some nicer, less repetitive way of expressing this?
+          {:error, _reason} = err -> err
+          comment -> {:data, comment}
+        end
     end
   end
 
@@ -200,12 +204,33 @@ defmodule Arfficionado do
 
   defp parse_attribute([{:string, name}, {:string, type} | rest]) do
     case String.downcase(type) do
-      "numeric" -> {:attribute, name, :numeric, parse_optional_comment(rest)}
-      "real" -> {:attribute, name, :real, parse_optional_comment(rest)}
-      "integer" -> {:attribute, name, :integer, parse_optional_comment(rest)}
-      "string" -> {:attribute, name, :string, parse_optional_comment(rest)}
+      "numeric" -> 
+        # TODO: try to get rid of the repeated case {:error, reason} blocks
+        case parse_optional_comment(rest) do
+          {:error, _reason} = err -> err
+          comment -> {:attribute, name, :numeric, comment}
+        end
+      "real" ->
+        case parse_optional_comment(rest) do
+          {:error, _reason} = err -> err
+          comment ->  {:attribute, name, :real, comment}
+        end
+      "integer" -> 
+        case parse_optional_comment(rest) do
+          {:error, _reason} = err -> err
+          comment -> {:attribute, name, :integer, comment}
+        end
+      "string" -> 
+        case parse_optional_comment(rest) do
+          {:error, _reason} = err -> err
+          comment -> {:attribute, name, :string, comment}
+        end
       "date" -> parse_date(rest, name)
-      "relational" -> {:attribute, name, :relational, parse_optional_comment(rest)}
+      "relational" -> 
+        case parse_optional_comment(rest) do
+          {:error, _reason} = err -> err
+          comment -> {:attribute, name, :relational, comment}
+        end
     end
   end
 
