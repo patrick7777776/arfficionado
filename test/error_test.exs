@@ -168,6 +168,78 @@ defmodule ErrorTest do
       """) == {:error, "Line 7: Cannot parse 2012-10-05 as ISO-8601 date for attribute a2.", :closed}
   end
 
+  test "instance: numeric 0." do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 numeric
+      @attribute a2 numeric
+      @data
+      1.0, 2.
+      """) == {:error, "Line 5: Nonempty remainder . when parsing 2. as integer/real for attribute a2.", :closed}
+  end
+
+  test "instance: unclosed quote" do
+    assert read(~s"""
+      @relation foo
+      @attribute n numeric
+      @attribute text string
+      @data
+      1, "line\\nline2"
+      2, "in \\\"quotes\\\" ..."
+      3, "boom
+      4, "the end"
+      """) == {:error, "Line 7: \"boom\n is missing closing quote for attribute text.", :closed}
+  end
+
+  test "@relation unclosed quote" do
+    assert read(~s"""
+      @relation "foo bar
+      @attribute a1 integer
+      @attribute a2 integer
+      @data
+      1, 2
+      """) == {:error, "Line 1: Unclosed quote in @relation.", :closed}
+  end
+
+  test "@relation followed by unexpected tokens" do
+    assert read(~s"""
+      @relation foo bar
+      """) == {:error, "Line 1: Unexpected: [{:string, \"bar\"}, :line_break]", :closed}
+  end
+
+  test "@attribute unclosed quote" do
+    assert read(~s"""
+      @relation foo
+      @attribute "a 1 1" integer
+      @attribute "a 1 2 integer
+      @data
+      1, 2
+      """) == {:error, "Line 3: Unclosed quote in @attribute.", :closed}
+  end
+
+  test "@attribute followed by unexpected tokens" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer, which must be a prime
+      @data
+      1
+      """) == {:error, "Line 3: ", :closed}
+  end
+
+  test "@data followed by unexpected tokens" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @attribute a2 integer
+      @data schmata I like my theory
+      1, 2
+      """) == {:error, "Line 4: ", :closed}
+  end
+
+  # same attribute name given twice!
+  # non-iso 8601 date format: reject for now
+  # random tokens in date attribute declaration
+
   defp read(s) do
     {:ok, stream} = StringIO.open(s)
     stream
@@ -175,8 +247,5 @@ defmodule ErrorTest do
     |> read(ETHandler, nil)
   end
 
-  # leniency tests: float in int column; float: missing -0 , missing 0
-  # extra [1-20] int ranges @attribute
-  # no commas, just spaces
 
 end

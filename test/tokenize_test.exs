@@ -153,4 +153,15 @@ defmodule TokenizeTest do
     assert tokenize(~s[""\n]) == [{:string, ""}, :line_break]
   end
 
+  test "example data - quote with escaped quote inside" do
+    assert tokenize(~s{"a\\\"b"\n}) == [
+             {:string, "a\\\"b"},
+             :line_break
+           ]
+
+    assert tokenize(~s{'a\\\'b'\n}) == [
+             {:string, "a\\\'b"},
+             :line_break
+           ]
+  end
 end

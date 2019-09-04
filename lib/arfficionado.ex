@@ -2,6 +2,9 @@ defmodule Arfficionado do
 
   # make sure that each parse path has an error-catch-all (via tests)
   # do we need to wrap a try catch around this at the top level to ensure that no unexpected error is actually raised?!
+  #
+  # pass file through both weka reader and this, compare results :-)
+  #   - produce same error messages... :-)
 
   @moduledoc """
     Reader for ARFF (Attribute Relation File Format) files.
@@ -89,6 +92,9 @@ defmodule Arfficionado do
               {coh, uhs, {:instance, attributes, header_finished, line_number + 1}}
           end
 
+        {:error, reason} ->
+          halt_with_error(reason, handler, handler_state, {:halt, attributes, header_finished, line_number })
+
         _ ->
           halt_with_error(~s"Expected #{Atom.to_string(stage)}.", handler, handler_state, {:halt, attributes, header_finished, line_number })
 
@@ -122,33 +128,14 @@ defmodule Arfficionado do
   defp cv([v | vs], [], _), do: {:error, "More values than attributes."}
   defp cv([], [a | as], _), do: {:error, "Fewer values than attributes."}
 
+  defp c({:unclosed_quote, quoted}, {:attribute, name, _, _}), do: {:error, ~s"#{quoted} is missing closing quote for attribute #{name}."}
+
   defp c(:missing, _), do: :missing
 
-  # integer, float, numeric are all the same to ARFF, so simplify all of this code! Consider making integer/real into numeric and having one numeric case that adds missing -0 / 0 and first tries int then float...
-  defp c(v, {:attribute, name, :integer, _}) do
-    case Integer.parse(v) do
-      {i, ""} -> i
-      _ ->
-        # be lenient -- some files have float values in an int column
-        case Float.parse(v) do
-          {f, ""} -> f
-          :error -> {:error, ~s"Cannot cast #{v} to integer/real for attribute #{name}."}
-        end
-    end
-  end
+  defp c("." <> v, {:attribute, _, type, _} = att) when type == :integer or type == :real or type == :numeric, do: c("0." <> v, att)
+  defp c("-." <> v, {:attribute, _, type, _} = att) when type == :integer or type == :real or type == :numeric, do: c("-0." <> v, att)
 
-  defp c("." <> v, {:attribute, _, type, _} = att) when type == :real or type == :numeric, do: c("0." <> v, att)
-  defp c("-." <> v, {:attribute, _, type, _} = att) when type == :real or type == :numeric, do: c("-0." <> v, att)
-
-  defp c(v, {:attribute, name, :real, _}) do
-    case Float.parse(v) do
-      {f, ""} -> f
-      :error -> {:error, ~s"Cannot cast #{v} to integer/real for attribute #{name}."}
-    end
-  end
-
-  #TODO: duplication with integer case
-  defp c(v, {:attribute, name, :numeric, _}) do
+  defp c(v, {:attribute, name, type, _}) when type == :integer or type == :real or type == :numeric do
     case Integer.parse(v) do
       {i, ""} ->
         i
@@ -156,6 +143,7 @@ defmodule Arfficionado do
       _ ->
         case Float.parse(v) do
           {f, ""} -> f
+          {f, remainder} -> {:error, ~s"Nonempty remainder #{remainder} when parsing #{v} as integer/real for attribute #{name}."}
           :error -> {:error, ~s"Cannot cast #{v} to integer/real for attribute #{name}."}
         end
     end
@@ -195,8 +183,20 @@ defmodule Arfficionado do
 
   def parse(instance), do: parse_raw_instance(instance)
 
-  defp parse_relation([{:string, name} | rest]),
-    do: {:relation, name, parse_optional_comment(rest)}
+  defp parse_relation([{:unclosed_quote, quoted}]),
+    do: {:error, "Unclosed quote in @relation."}
+
+  defp parse_relation([{:string, name} | rest]) do
+    case parse_optional_comment(rest) do
+      {:error, reason} = err ->
+        err
+      comment ->
+        {:relation, name, comment}
+    end
+  end
+
+  defp parse_attribute([{:unclosed_quote, quoted}]),
+    do: {:error, "Unclosed quote in @attribute."}
 
   defp parse_attribute([{:string, name}, {:string, type} | rest]) do
     case String.downcase(type) do
@@ -234,6 +234,7 @@ defmodule Arfficionado do
   defp parse_optional_comment([:tab | rest]), do: parse_optional_comment(rest)
   defp parse_optional_comment([:line_break]), do: nil
   defp parse_optional_comment([{:comment, comment}]), do: comment
+  defp parse_optional_comment(unexpected), do: {:error, ~s"Unexpected: #{inspect(unexpected)}"}
 
   defp parse_raw_instance(rest), do: pri(rest, [])
 
@@ -243,8 +244,20 @@ defmodule Arfficionado do
          {:raw_instance, Enum.reverse([value(val) | acc]), Integer.parse(weight) |> elem(0),
           parse_optional_comment(rest)}
 
+  defp pri([:comma | rest], acc),
+    do: pri(rest, [:missing | acc])
+
   defp pri([val, sep | rest], acc) when sep == :tab or sep == :comma,
     do: pri(rest, [value(val) | acc])
+
+  defp pri([{:comment, _} | rest] = cr, acc),
+    do: {:raw_instance, Enum.reverse(acc), 1, parse_optional_comment(cr)}
+
+  defp pri([:tab | rest] = cr, acc),
+    do: pri(rest, acc)
+
+  defp pri([{:unclosed_quote, _quoted} = uq], acc),
+    do: {:raw_instance, Enum.reverse([uq | acc]), 1, nil}
 
   defp pri([val | rest], acc),
     do: {:raw_instance, Enum.reverse([value(val) | acc]), 1, parse_optional_comment(rest)}
@@ -269,9 +282,14 @@ defmodule Arfficionado do
   defp t(<<c::utf8, rest::binary>>, acc) when c == ?}, do: t(rest, [:close_curly | acc])
   defp t(<<c::utf8, rest::binary>>, acc) when c == ??, do: t(rest, [:missing | acc])
 
-  defp t(<<c::utf8, rest::binary>>, acc) when c == ?' or c == ?" do
-    [string, remainder] = :binary.split(rest, [List.to_string([c])])
-    t(remainder, [{:string, string} | acc])
+  defp t(<<c::utf8, rest::binary>> = quoted, acc) when c == ?' or c == ?" do
+    case index_of_closing_quote(rest, c, 0) do
+      :unclosed_quote ->
+        [{:unclosed_quote, quoted} | acc]
+      pos -> 
+        {string, <<_::utf8, remainder::binary>>} = String.split_at(rest, pos)
+        t(remainder, [{:string, string} | acc])
+    end
   end
 
   defp t(bin, acc) do
@@ -283,4 +301,10 @@ defmodule Arfficionado do
         t("\n", [{:string, bin} | acc])
     end
   end
+
+  defp index_of_closing_quote(<<bs::utf8, q::utf8, rest::binary>>, qc, pos) when bs == 92 and q == qc, do: index_of_closing_quote(rest, qc, pos + 2)
+  defp index_of_closing_quote(<<q::utf8, rest::binary>>, qc, pos) when q == qc, do: pos
+  defp index_of_closing_quote(<<c::utf8, rest::binary>>, qc, pos), do: index_of_closing_quote(rest, qc, pos + 1)
+  defp index_of_closing_quote(<<>>, _, _), do: :unclosed_quote
+
 end
