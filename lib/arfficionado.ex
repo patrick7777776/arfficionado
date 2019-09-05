@@ -2,7 +2,7 @@ defmodule Arfficionado do
 
   @moduledoc """
   Reader for [ARFF (Attribute Relation File Format)](https://waikato.github.io/weka-wiki/arff/) data.
-  Adaptable to application-specific needs through custom handler modules.
+  Adaptable to application-specific needs through custom handler behaviour implementations.
 
   ```
   {:ok, instances} =
@@ -16,7 +16,7 @@ defmodule Arfficionado do
   """
 
   @doc ~s"""
-  Parses an Enumerable of ARFF lines.
+  Parses an enumerable/stream of ARFF lines, invokes handler callbacks and returns final handler state.
   
   Modifies `initial_handler_state` through invocations of `handler` callbacks.
   Returns `{:ok, final_handler_state}` or `{:error, reason, final_handler_state}`. 
@@ -37,13 +37,22 @@ defmodule Arfficionado do
   1,      Hello,         red
   2,      "Hi there!",   blue
   ?,      ?,             ?          % missing values
-  3.1415, 'What\\'s up?', red
+  3.1415, 'What\\'s up?', red        % escaped '
   4,      abc,           blue, {7}  % instance weight 7
   ```
 
-      iex> StringIO.open("@relation example\\n@attribute a1 numeric\\n@attribute a2 string\\n@attribute a3 {red, blue}\\n@data\\n1,Hello,red\\n2,\\"Hi there!\\",blue\\n?,?,?\\n3.1415,'What\\\\'s up?',red\\n4,abc,blue,{7}\\n") |>
-      ...> elem(1) |>
-      ...> IO.binstream(:line) |>
+      iex> [
+      ...>   ~s[@relation example],
+      ...>   ~s[@attribute a1 numeric],
+      ...>   ~s[@attribute a2 string],
+      ...>   ~s[@attribute a3 {red, blue}],
+      ...>   ~s[@data],
+      ...>   ~s[1,      Hello,            red],
+      ...>   ~s[2,      "Hi there!",      blue],
+      ...>   ~s[?,      ?,                ?       % missing values],
+      ...>   ~s[3.1415, 'What\\\\'s up?', red       % escaped '],
+      ...>   ~s[4,      abc,           blue, {7}  % instance weight 7] 
+      ...> ] |>
       ...> Arfficionado.read(Arfficionado.ListHandler, [])
       {:ok, [
         {[1, "Hello", :red], 1},
@@ -54,13 +63,12 @@ defmodule Arfficionado do
       ]}
   """
   @spec read(Enumerable.t(), Arfficionado.Handler.t(), Arfficionado.Handler.state()) :: {:ok, Arfficionado.Handler.state()} | {:error, String.t(), Arfficionado.Handler.state()}
-  def read(stream, handler, initial_handler_state) do
-    # TODO: rename stream to arff? enumerable??
-    case Enum.reduce_while(stream, {handler, initial_handler_state, {:"@relation", [], false, 1}}, &process_line/2) do
-      {_, {:error, reason, handler_state}, {_, _, _, line_number}} ->
+  def read(arff, handler, initial_handler_state) do
+    case Enum.reduce_while(arff, {handler, initial_handler_state, {:"@relation", [], 1}}, &process_line/2) do
+      {_, {:error, reason, handler_state}, {_, _, line_number}} ->
         final_state = handler.close(handler_state)
         {:error, ~s"Line #{line_number}: #{reason}", final_state}
-      {_, handler_state, {stage, _, _, line_number}} when stage != :instance ->
+      {_, handler_state, {stage, _, line_number}} when stage != :instance ->
         final_state = handler.close(handler_state)
         {:error, ~s"Line #{line_number}: Expected #{Atom.to_string(stage)}.", final_state} # error msg assembly somewhat duplicated
       {_, handler_state, _} ->
@@ -69,35 +77,43 @@ defmodule Arfficionado do
     end
   end
 
-  # TODO: clean up that internal state and its handling; add a state-machine that detects deviations from arff spec (missing header, duplicates, wrong order, ...)
-  # TODO: remove header_finished 
-  defp process_line(line, {handler, handler_state, {stage, attributes, header_finished, line_number}}) do
+  # could be (line, {handler, handler_state}, {stage,atts,lineno}=internal_state})
+  defp process_line(line, {handler, handler_state, {stage, attributes, line_number}}) do
     parsed =
       line
       |> tokenize()
       |> parse()
 
+    # could change this shape to make the updating/return clauses easier to assemble
     {cont_or_halt, updated_handler_state, updated_internal_state} =
       case parsed do
         :empty_line ->
-          {:cont, handler_state, {stage, attributes, header_finished, line_number + 1}}
+          {:cont, handler_state, {stage, attributes, line_number + 1}}
 
         {:comment, comment} ->
-          {coh, uih} = handler.line_comment(comment, handler_state)
-          {coh, uih, {stage, attributes, header_finished, line_number + 1}}
+          if function_exported?(handler, :line_comment, 2) do
+            {coh, uhs} = handler.line_comment(comment, handler_state)
+            {coh, uhs, {stage, attributes, line_number + 1}}
+          else
+            {:cont, handler_state, {stage, attributes, line_number + 1}}
+          end
 
         {:relation, name, comment} when stage == :"@relation" ->
-          {coh, uih} = handler.relation(name, comment, handler_state)
-          {coh, uih, {:"@attribute", attributes, header_finished, line_number + 1}}
+          if function_exported?(handler, :relation, 3) do
+            {coh, uhs} = handler.relation(name, comment, handler_state)
+            {coh, uhs, {:"@attribute", attributes, line_number + 1}}
+          else
+            {:cont, handler_state, {:"@attribute", attributes, line_number + 1}}
+          end
 
         {:attribute, name, _type, _comment} = attribute when stage == :"@attribute" or stage == :"@attribute or @data" ->
           # TODO: handle relational attributes!!!!
           
           # TODO: make this check more clear and efficient; sort out that internal state... header_finished is not needed anymore; maybe use a map
           if Enum.find(attributes, false, fn {:attribute, an, _, _} -> an == name end) do
-            halt_with_error("Duplicate attribute name #{name}.", handler, handler_state, {:halt, attributes, header_finished, line_number})
+            halt_with_error("Duplicate attribute name #{name}.", handler, handler_state, {:halt, attributes, line_number})
           else
-            {:cont, handler_state, {:"@attribute or @data", [attribute | attributes], header_finished, line_number + 1}}
+            {:cont, handler_state, {:"@attribute or @data", [attribute | attributes], line_number + 1}}
           end
         {:data, comment} when length(attributes) > 0 and stage == :"@attribute or @data" ->
           finished_attributes = Enum.reverse(attributes)
@@ -107,28 +123,32 @@ defmodule Arfficionado do
 
           case cont_or_halt do
             :halt ->
-              {:halt, updated_handler_state, {:halt, finished_attributes, true, line_number + 1}}
+              {:halt, updated_handler_state, {:halt, finished_attributes, line_number + 1}}
 
             :cont ->
-              {coh, uhs} = handler.begin_data(comment, updated_handler_state)
-              {coh, uhs, {:instance, finished_attributes, true, line_number + 1}}
+              if function_exported?(handler, :begin_data, 2) do
+                {coh, uhs} = handler.begin_data(comment, updated_handler_state)
+                {coh, uhs, {:instance, finished_attributes, line_number + 1}}
+              else
+                {:cont, updated_handler_state, {:instance, finished_attributes, line_number + 1}}
+              end
           end
 
         {:raw_instance, _, _, _} = ri when stage == :instance ->
           case cast(ri, attributes) do
             {:error, reason}  ->
-              halt_with_error(reason, handler, handler_state, {:halt, attributes, header_finished, line_number })
+              halt_with_error(reason, handler, handler_state, {:halt, attributes, line_number })
 
             {:instance, values, weight, comment} -> 
               {coh, uhs} = handler.instance(values, weight, comment, handler_state)
-              {coh, uhs, {:instance, attributes, header_finished, line_number + 1}}
+              {coh, uhs, {:instance, attributes, line_number + 1}}
           end
 
         {:error, reason} ->
-          halt_with_error(reason, handler, handler_state, {:halt, attributes, header_finished, line_number })
+          halt_with_error(reason, handler, handler_state, {:halt, attributes, line_number })
 
         _ ->
-          halt_with_error(~s"Expected #{Atom.to_string(stage)}.", handler, handler_state, {:halt, attributes, header_finished, line_number })
+          halt_with_error(~s"Expected #{Atom.to_string(stage)}.", handler, handler_state, {:halt, attributes, line_number })
 
       end
 
@@ -368,7 +388,7 @@ defmodule Arfficionado do
     |> Enum.reverse()
   end
 
-  defp t(<<>>, acc), do: acc
+  defp t(<<>>, acc), do: [:line_break | acc]
   defp t(<<c::utf8, _rest::binary>> = comment, acc) when c == ?%, do: [{:comment, comment} | acc]
   defp t(<<c::utf8, rest::binary>>, acc) when c == 32, do: t(rest, acc)
   defp t(<<c::utf8>>, acc) when c == ?\n, do: [:line_break | acc]
@@ -379,11 +399,10 @@ defmodule Arfficionado do
   defp t(<<c::utf8, rest::binary>>, acc) when c == ??, do: t(rest, [:missing | acc])
 
   defp t(<<c::utf8, rest::binary>> = quoted, acc) when c == ?' or c == ?" do
-    case index_of_closing_quote(rest, c, 0) do
+    case q(rest, c, <<>>) do
       :unclosed_quote ->
         [{:unclosed_quote, quoted} | acc]
-      pos -> 
-        {string, <<_::utf8, remainder::binary>>} = String.split_at(rest, pos)
+      {string, remainder} ->
         t(remainder, [{:string, string} | acc])
     end
   end
@@ -393,14 +412,14 @@ defmodule Arfficionado do
       {pos, _length} -> 
         {string, rest} = String.split_at(bin, pos)
         t(rest, [{:string, string} | acc])
-      :nomatch -> # occurs if last line in file has no linebreak
-        t("\n", [{:string, bin} | acc])
+      :nomatch ->
+        [:line_break, {:string, bin} | acc]
     end
   end
 
-  defp index_of_closing_quote(<<bs::utf8, q::utf8, rest::binary>>, qc, pos) when bs == 92 and q == qc, do: index_of_closing_quote(rest, qc, pos + 2)
-  defp index_of_closing_quote(<<q::utf8, _rest::binary>>, qc, pos) when q == qc, do: pos
-  defp index_of_closing_quote(<<_::utf8, rest::binary>>, qc, pos), do: index_of_closing_quote(rest, qc, pos + 1)
-  defp index_of_closing_quote(<<>>, _, _), do: :unclosed_quote
+  defp q(<<bs::utf8, q::utf8, rest::binary>>, qc, acc) when bs == 92 and q == qc, do: q(rest, qc, <<acc::binary, q>>)
+  defp q(<<q::utf8, rest::binary>>, qc, acc) when q == qc, do: {acc, rest}
+  defp q(<<c::utf8, rest::binary>>, qc, acc), do: q(rest, qc, <<acc::binary, c>>)
+  defp q(<<>>, _, _), do: :unclosed_quote
 
 end

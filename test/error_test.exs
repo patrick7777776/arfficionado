@@ -7,22 +7,13 @@ defmodule ErrorTest do
     @behaviour Handler
 
     @impl Handler
-    def line_comment(_comment, state), do: {:cont, state}
-
-    @impl Handler
-    def relation(_name, _comment, state), do: {:cont, state}
-
-    @impl Handler
     def attributes(_attributes, state), do: {:cont, state}
-
-    @impl Handler
-    def begin_data(_comment, state), do: {:cont, state}
 
     @impl Handler
     def instance(_values, _weight, _comment, state), do: {:cont, state}
 
     @impl Handler
-    def close(state), do: :closed
+    def close(_state), do: :closed
   end
 
   test "@relation expected" do
