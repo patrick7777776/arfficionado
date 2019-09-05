@@ -14,5 +14,4 @@ defmodule Arfficionado.ListHandler do
 
   @impl Handler
   def close(instances), do: Enum.reverse(instances)
-
 end

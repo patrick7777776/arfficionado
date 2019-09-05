@@ -45,11 +45,9 @@ defmodule Arfficionado.Handler do
   """
   @callback instance(values(), weight(), optional_comment(), state()) :: updated_state()
 
-
   # TODO: pass success | failure to the close call
   @doc """
   Invoked when the input has been exhausted or an error has been encountered.
   """
   @callback close(state()) :: state()
-
 end
