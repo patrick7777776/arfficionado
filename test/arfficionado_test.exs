@@ -2,6 +2,8 @@ defmodule ArfficionadoTest do
   use ExUnit.Case
   import Arfficionado, only: [read: 3]
 
+  doctest Arfficionado
+
   defmodule TestHandler do
     alias Arfficionado.Handler
     @behaviour Handler

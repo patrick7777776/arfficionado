@@ -1,6 +1,6 @@
 defmodule Arfficionado.ListHandler do
   @moduledoc """
-    Example callback module that collects a list of {instance, weight} tuples, where instance is a list of values (corresponding to the attributes defined in the ARFF header) and weight is an integer.
+  Example handler module that collects a list of `{instance, weight}` tuples, where instance is a list of values (corresponding to the attributes defined in the ARFF header) and weight is an integer. Use `[]` as the initial state.
   """
 
   alias Arfficionado.Handler

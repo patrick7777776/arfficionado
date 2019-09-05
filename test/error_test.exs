@@ -114,6 +114,24 @@ defmodule ErrorTest do
       """) == {:error, "Line 5: More values than attributes.", :closed}
   end
 
+  test "instance: unexpected tokens after weight" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @data
+      1, {42} hello
+      """) == {:error, "Line 4: Unexpected: [{:string, \"hello\"}, :line_break]", :closed}
+  end
+
+  test "instance: unexpected tokens" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @data
+      1 hello
+      """) == {:error, "Line 4: Unexpected: [{:string, \"hello\"}, :line_break]", :closed}
+  end
+
   test "instance: type error int-string" do
     assert read(~s"""
       @relation foo
@@ -217,13 +235,40 @@ defmodule ErrorTest do
       """) == {:error, "Line 3: Unclosed quote in @attribute.", :closed}
   end
 
-  test "@attribute followed by unexpected tokens" do
+  test "@attribute (integer) followed by unexpected tokens" do
     assert read(~s"""
       @relation foo
       @attribute a1 integer, which must be a prime
       @data
       1
       """) == {:error, "Line 2: Unexpected: [:comma, {:string, \"which\"}, {:string, \"must\"}, {:string, \"be\"}, {:string, \"a\"}, {:string, \"prime\"}, :line_break]", :closed}
+  end
+
+  test "@attribute (nominal) followed by unexpected tokens" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 {yay, nay} maybe
+      @data
+      yay 
+      """) == {:error, "Line 2: Unexpected: [{:string, \"maybe\"}, :line_break]", :closed}
+  end
+
+  test "@attribute (string) followed by unexpected tokens" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 string 1234
+      @data
+      yay 
+      """) == {:error, "Line 2: Unexpected: [{:string, \"1234\"}, :line_break]", :closed}
+  end
+
+  test "@attribute (date) followed by unexpected tokens" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 date 'yyyy-mm-dd' yo
+      @data
+      1
+      """) == {:error, "Line 2: Unexpected: [{:string, \"yo\"}, :line_break]", :closed}
   end
 
   test "@data followed by unexpected tokens" do
@@ -236,9 +281,18 @@ defmodule ErrorTest do
       """) == {:error, "Line 4: Unexpected: [{:string, \"schmata\"}, :line_break]", :closed}
   end
 
-  # same attribute name given twice!
+  test "duplicated attribute name" do
+    assert read(~s"""
+      @relation foo
+      @attribute a1 integer
+      @attribute a1 string
+      @data
+      1, a
+      """) == {:error, "Line 3: Duplicate attribute name a1.", :closed}
+  end
+
   # non-iso 8601 date format: reject for now
-  # random tokens in date attribute declaration
+  # @randomstring
 
   defp read(s) do
     {:ok, stream} = StringIO.open(s)

@@ -1,34 +1,61 @@
 defmodule Arfficionado do
 
-  # make sure that each parse path has an error-catch-all (via tests)
-  # do we need to wrap a try catch around this at the top level to ensure that no unexpected error is actually raised?!
-  #
-  # pass file through both weka reader and this, compare results :-)
-  #   - produce same error messages... :-)
-
   @moduledoc """
-    Reader for ARFF (Attribute Relation File Format) files.
-    TODO: link to arff
-    TODO: general usage idea
-    TODO: current limitations
-    TODO: use an official arff example file for illustrations...
+  Reader for [ARFF (Attribute Relation File Format)](https://waikato.github.io/weka-wiki/arff/) data.
+  Adaptable to application-specific needs through custom handler modules.
+
+  ```
+  {:ok, instances} =
+    File.stream!("data.arff")
+    |> Arfficionado.read(Arfficionado.ListHandler, [])
+  ```
+
+  Current limitations:
+  - ISO-8601 is the only supported `date` format
+  - no support for attributes of type `relational`
   """
 
-  @doc """
-    Reads a line `stream` that represents an ARFF file and invokes corresponding `handler` callbacks.
-    Maintains handler state, which is initialized to `initial_handler_state` and is modified by the callback invocations.
+  @doc ~s"""
+  Parses an Enumerable of ARFF lines.
+  
+  Modifies `initial_handler_state` through invocations of `handler` callbacks.
+  Returns `{:ok, final_handler_state}` or `{:error, reason, final_handler_state}`. 
 
-   Returns `{:ok, final_handler_state}` if the stream was processed successfully, and `{:error, reason, final_handler_state}` otherwise. The handler callback `c:close/1` is called in both cases. 
+  The handler callback `Arfficionado.Handler:close/1` is called in both cases.
 
 
-    ## Examples
+  ## Examples
 
-        iex> File.stream!("my.arff")
-        ...> |> Arfficionado.read(Arfficionado.ListHandler, [])
-        {:ok, [{[v1_1, v1_2, v1_3], 1}, ... {[vn_1, vn_2, vn_3], 1}]}
+  Using `Arfficionado.ListHandler` to collect the instances (with weights) from the following ARFF input:
 
+  ```
+  @relation example
+  @attribute a1 numeric
+  @attribute a2 string
+  @attribute a3 {red, blue}
+  @data
+  1,      Hello,         red
+  2,      "Hi there!",   blue
+  ?,      ?,             ?          % missing values
+  3.1415, 'What\\'s up?', red
+  4,      abc,           blue, {7}  % instance weight 7
+  ```
+
+      iex> StringIO.open("@relation example\\n@attribute a1 numeric\\n@attribute a2 string\\n@attribute a3 {red, blue}\\n@data\\n1,Hello,red\\n2,\\"Hi there!\\",blue\\n?,?,?\\n3.1415,'What\\\\'s up?',red\\n4,abc,blue,{7}\\n") |>
+      ...> elem(1) |>
+      ...> IO.binstream(:line) |>
+      ...> Arfficionado.read(Arfficionado.ListHandler, [])
+      {:ok, [
+        {[1, "Hello", :red], 1},
+        {[2, "Hi there!", :blue], 1},
+        {[:missing, :missing, :missing], 1}, 
+        {[3.1415, "What's up?", :red], 1}, 
+        {[4, "abc", :blue], 7}
+      ]}
   """
+  @spec read(Enumerable.t(), Arfficionado.Handler.t(), Arfficionado.Handler.state()) :: {:ok, Arfficionado.Handler.state()} | {:error, String.t(), Arfficionado.Handler.state()}
   def read(stream, handler, initial_handler_state) do
+    # TODO: rename stream to arff? enumerable??
     case Enum.reduce_while(stream, {handler, initial_handler_state, {:"@relation", [], false, 1}}, &process_line/2) do
       {_, {:error, reason, handler_state}, {_, _, _, line_number}} ->
         final_state = handler.close(handler_state)
@@ -63,10 +90,15 @@ defmodule Arfficionado do
           {coh, uih} = handler.relation(name, comment, handler_state)
           {coh, uih, {:"@attribute", attributes, header_finished, line_number + 1}}
 
-        {:attribute, _name, _type, _comment} = attribute when stage == :"@attribute" or stage == :"@attribute or @data" ->
+        {:attribute, name, _type, _comment} = attribute when stage == :"@attribute" or stage == :"@attribute or @data" ->
           # TODO: handle relational attributes!!!!
-          {:cont, handler_state, {:"@attribute or @data", [attribute | attributes], header_finished, line_number + 1}}
-
+          
+          # TODO: make this check more clear and efficient; sort out that internal state... header_finished is not needed anymore; maybe use a map
+          if Enum.find(attributes, false, fn {:attribute, an, _, _} -> an == name end) do
+            halt_with_error("Duplicate attribute name #{name}.", handler, handler_state, {:halt, attributes, header_finished, line_number})
+          else
+            {:cont, handler_state, {:"@attribute or @data", [attribute | attributes], header_finished, line_number + 1}}
+          end
         {:data, comment} when length(attributes) > 0 and stage == :"@attribute or @data" ->
           finished_attributes = Enum.reverse(attributes)
 
@@ -103,7 +135,7 @@ defmodule Arfficionado do
     {cont_or_halt, {handler, updated_handler_state, updated_internal_state}}
   end
 
-  defp halt_with_error(reason, handler, handler_state, internal_state) do
+  defp halt_with_error(reason, _handler, handler_state, internal_state) do
     # TODO: add report_error function to handler, call it .. or .. add flag to close
     {:halt, {:error, reason, handler_state}, internal_state}
   end
@@ -125,8 +157,8 @@ defmodule Arfficionado do
         cv(vs, as, [cast_value | acc])
     end
   end
-  defp cv([v | vs], [], _), do: {:error, "More values than attributes."}
-  defp cv([], [a | as], _), do: {:error, "Fewer values than attributes."}
+  defp cv([_v | _vs], [], _), do: {:error, "More values than attributes."}
+  defp cv([], [_a | _as], _), do: {:error, "Fewer values than attributes."}
 
   defp c({:unclosed_quote, quoted}, {:attribute, name, _, _}), do: {:error, ~s"#{quoted} is missing closing quote for attribute #{name}."}
 
@@ -143,7 +175,7 @@ defmodule Arfficionado do
       _ ->
         case Float.parse(v) do
           {f, ""} -> f
-          {f, remainder} -> {:error, ~s"Nonempty remainder #{remainder} when parsing #{v} as integer/real for attribute #{name}."}
+          {_f, remainder} -> {:error, ~s"Nonempty remainder #{remainder} when parsing #{v} as integer/real for attribute #{name}."}
           :error -> {:error, ~s"Cannot cast #{v} to integer/real for attribute #{name}."}
         end
     end
@@ -170,7 +202,7 @@ defmodule Arfficionado do
   @doc false
   def parse([:line_break]), do: :empty_line
 
-  def parse([{:comment, comment} = cmt]), do: cmt
+  def parse([{:comment, _comment} = comment]), do: comment
 
   def parse([{:string, <<c::utf8, _::binary>> = s} | rest]) when c == ?@ do
     case String.downcase(s) do
@@ -187,19 +219,19 @@ defmodule Arfficionado do
 
   def parse(instance), do: parse_raw_instance(instance)
 
-  defp parse_relation([{:unclosed_quote, quoted}]),
+  defp parse_relation([{:unclosed_quote, _quoted}]),
     do: {:error, "Unclosed quote in @relation."}
 
   defp parse_relation([{:string, name} | rest]) do
     case parse_optional_comment(rest) do
-      {:error, reason} = err ->
+      {:error, _reason} = err ->
         err
       comment ->
         {:relation, name, comment}
     end
   end
 
-  defp parse_attribute([{:unclosed_quote, quoted}]),
+  defp parse_attribute([{:unclosed_quote, _quoted}]),
     do: {:error, "Unclosed quote in @attribute."}
 
   defp parse_attribute([{:string, name}, {:string, type} | rest]) do
@@ -235,26 +267,53 @@ defmodule Arfficionado do
   end
 
   defp parse_attribute([{:string, name}, :open_curly | rest]) do
-    {enum, comment} = pn(rest, [])
-    {:attribute, name, {:nominal, enum}, comment}
+    case pn(rest, []) do
+      {:error, _reason} = err -> err
+      {enum, comment} -> {:attribute, name, {:nominal, enum}, comment}
+    end
   end
 
-  defp parse_attribute([{:string, name} = n, :tab | rest]), do:
+  defp parse_attribute([{:string, _name} = n, :tab | rest]), do:
     parse_attribute([n | rest])
 
-  defp pn([:close_curly | rest], acc), do: {Enum.reverse(acc), parse_optional_comment(rest)}
+  defp pn([:close_curly | rest], acc) do
+    case parse_optional_comment(rest) do
+      {:error, _reason} = err -> err
+      comment -> {Enum.reverse(acc), comment}
+    end
+  end
+
   defp pn([{:string, const}, :comma | rest], acc), do: pn(rest, [const | acc])
 
-  defp pn([{:string, const}, :close_curly | rest], acc),
-    do: {Enum.reverse([const | acc]), parse_optional_comment(rest)}
+  defp pn([{:string, const}, :close_curly | rest], acc) do
+    case parse_optional_comment(rest) do
+      {:error, _reason} = err -> err
+      comment -> {Enum.reverse([const | acc]), comment}
+    end
+  end
 
-  defp parse_date([{:string, format} | rest], name),
-    do: {:attribute, name, {:date, format}, parse_optional_comment(rest)}
+  defp parse_date([{:string, format} | rest], name) do
+    # TODO: find way to reduce this duplication
+    case parse_optional_comment(rest) do
+      {:error, _reason} = err -> err
+      comment -> {:attribute, name, {:date, format}, comment}
+    end
+  end
 
-  defp parse_date(rest, name),
-    do: {:attribute, name, {:date, :iso_8601}, parse_optional_comment(rest)}
+  defp parse_date(rest, name) do
+    # TODO: find way to reduce this duplication
+    case parse_optional_comment(rest) do
+      {:error, _reason} = err -> err
+      comment -> {:attribute, name, {:date, :iso_8601}, comment}
+    end
+  end
 
-  defp parse_end([{:string, name} | rest]), do: {:end, name, parse_optional_comment(rest)}
+  defp parse_end([{:string, name} | rest]) do
+    case parse_optional_comment(rest) do
+      {:error, _reason} = err -> err
+      comment -> {:end, name, comment}
+    end
+  end
 
   defp parse_optional_comment([:tab | rest]), do: parse_optional_comment(rest)
   defp parse_optional_comment([:line_break]), do: nil
@@ -264,10 +323,14 @@ defmodule Arfficionado do
   defp parse_raw_instance(rest), do: pri(rest, [])
 
   defp pri([val, sep, :open_curly, {:string, weight}, :close_curly | rest], acc)
-       when sep == :tab or sep == :comma,
-       do:
-         {:raw_instance, Enum.reverse([value(val) | acc]), Integer.parse(weight) |> elem(0),
-          parse_optional_comment(rest)}
+       when sep == :tab or sep == :comma
+       do
+         case parse_optional_comment(rest) do
+           {:error, _reason} = err -> err
+           comment -> {:raw_instance, Enum.reverse([value(val) | acc]), Integer.parse(weight) |> elem(0), comment}
+         end
+       end
+
 
   defp pri([:comma | rest], acc),
     do: pri(rest, [:missing | acc])
@@ -275,17 +338,25 @@ defmodule Arfficionado do
   defp pri([val, sep | rest], acc) when sep == :tab or sep == :comma,
     do: pri(rest, [value(val) | acc])
 
-  defp pri([{:comment, _} | rest] = cr, acc),
-    do: {:raw_instance, Enum.reverse(acc), 1, parse_optional_comment(cr)}
+  defp pri([{:comment, _} | _rest] = cr, acc) do
+    case parse_optional_comment(cr) do
+      {:error, _reason} = err -> err
+      comment -> {:raw_instance, Enum.reverse(acc), 1, comment}
+    end
+  end
 
-  defp pri([:tab | rest] = cr, acc),
+  defp pri([:tab | rest], acc),
     do: pri(rest, acc)
 
   defp pri([{:unclosed_quote, _quoted} = uq], acc),
     do: {:raw_instance, Enum.reverse([uq | acc]), 1, nil}
 
-  defp pri([val | rest], acc),
-    do: {:raw_instance, Enum.reverse([value(val) | acc]), 1, parse_optional_comment(rest)}
+  defp pri([val | rest], acc) do
+    case parse_optional_comment(rest) do
+      {:error, _reason} = err -> err
+      comment -> {:raw_instance, Enum.reverse([value(val) | acc]), 1, comment}
+    end
+  end
 
   defp value({:string, v}), do: v
   defp value(:missing), do: :missing
@@ -298,7 +369,7 @@ defmodule Arfficionado do
   end
 
   defp t(<<>>, acc), do: acc
-  defp t(<<c::utf8, rest::binary>> = comment, acc) when c == ?%, do: [{:comment, comment} | acc]
+  defp t(<<c::utf8, _rest::binary>> = comment, acc) when c == ?%, do: [{:comment, comment} | acc]
   defp t(<<c::utf8, rest::binary>>, acc) when c == 32, do: t(rest, acc)
   defp t(<<c::utf8>>, acc) when c == ?\n, do: [:line_break | acc]
   defp t(<<c::utf8, rest::binary>>, acc) when c == ?\t, do: t(rest, [:tab | acc])
@@ -328,8 +399,8 @@ defmodule Arfficionado do
   end
 
   defp index_of_closing_quote(<<bs::utf8, q::utf8, rest::binary>>, qc, pos) when bs == 92 and q == qc, do: index_of_closing_quote(rest, qc, pos + 2)
-  defp index_of_closing_quote(<<q::utf8, rest::binary>>, qc, pos) when q == qc, do: pos
-  defp index_of_closing_quote(<<c::utf8, rest::binary>>, qc, pos), do: index_of_closing_quote(rest, qc, pos + 1)
+  defp index_of_closing_quote(<<q::utf8, _rest::binary>>, qc, pos) when q == qc, do: pos
+  defp index_of_closing_quote(<<_::utf8, rest::binary>>, qc, pos), do: index_of_closing_quote(rest, qc, pos + 1)
   defp index_of_closing_quote(<<>>, _, _), do: :unclosed_quote
 
 end
