@@ -1,3 +1,7 @@
+# TODO: pass success|error into close callback
+# TODO: add better type specs for attribute()
+# TODO: map integer, real to numeric and just have numeric in {:attribute, ...}
+# TODO: test that date format string is returned in {:attribute, {:date, fs}}
 defmodule Arfficionado do
   @moduledoc """
   Reader for [ARFF (Attribute Relation File Format)](https://waikato.github.io/weka-wiki/arff/) data.

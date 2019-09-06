@@ -2,17 +2,71 @@ defmodule Arfficionado.Handler do
   @moduledoc """
   Handler behaviour. Implement as per your application's requirements (for example, including side effects such as creating and writing to an ETS table).
   """
-  # provide a date-parsing function so we don't need to pull in any libaries...
+  # TODO: provide a date-parsing function so we don't need to pull in any libaries...
 
+  @typedoc """
+  Arfficionado.Handler type.
+  """
   @type t :: Arfficionado.Handler.t()
 
+  @typedoc """
+  Your handler's state.
+  """
   @type state() :: any
+
+  @typedoc """
+  Return value for most handler callbacks.
+  """
   @type updated_state() :: {:cont, state()} | {:halt, state()}
-  @type optional_comment :: String.t() | nil
+
+  @typedoc """
+  A comment or nil.
+  """
+  @type optional_comment :: comment() | nil
+
+  @typedoc """
+  A comment.
+  """
   @type comment :: String.t()
-  @type values() :: list(any)
+
+  @typedoc """
+  An instance's attribute-values.
+  """
+  @type values() :: list(value())
+
+  @typedoc """
+  An attribute-value. 
+  """
+  @type value() :: number() | String.t() | atom() | DateTime.t()
+
+  @typedoc """
+  Instance weight.
+  """
   @type weight() :: integer()
-  @type attributes() :: list(any)
+
+  @typedoc """
+  List of attribute definitions (ARFF header).
+  """
+  @type attributes() :: list(attribute())
+
+  @typedoc """
+  An attribute definition with name, type and optional comment.
+  """
+  @type attribute() :: {:attribute, name(), attribute_type(), optional_comment()}
+
+  @typedoc """
+  Attribute type.
+  """
+  @type attribute_type() :: :integer | :real | :numeric | {:nominal, list(atom())} | :string | {:date, date_format()}
+
+  @typedoc """
+  Date format.
+  """
+  @type date_format() :: :iso_8601 | String.t()
+
+  @typedoc """
+  Name for an attribute/relation.
+  """
   @type name :: String.t()
 
   @doc """
