@@ -1,6 +1,6 @@
 defmodule ArfficionadoTest do
   use ExUnit.Case
-  import Arfficionado, only: [read: 3]
+  import Arfficionado, only: [read: 2]
 
   doctest Arfficionado
 
@@ -20,6 +20,6 @@ defmodule ArfficionadoTest do
 
     stream
     |> IO.binstream(:line)
-    |> read(Arfficionado.ListHandler, [])
+    |> read(Arfficionado.ListHandler)
   end
 end

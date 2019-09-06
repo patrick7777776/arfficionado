@@ -1,6 +1,6 @@
 defmodule LeniencyTest do
   use ExUnit.Case
-  import Arfficionado, only: [read: 3]
+  import Arfficionado, only: [read: 2]
 
   test "omitting leading 0" do
     assert read(~s"""
@@ -68,7 +68,7 @@ defmodule LeniencyTest do
 
     stream
     |> IO.binstream(:line)
-    |> read(Arfficionado.ListHandler, [])
+    |> read(Arfficionado.ListHandler)
   end
 
   # extra [1-20] int ranges @attribute

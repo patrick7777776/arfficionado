@@ -1,5 +1,4 @@
 # TODO: pass success|error into close callback
-# TODO: add better type specs for attribute()
 # TODO: map integer, real to numeric and just have numeric in {:attribute, ...}
 # TODO: test that date format string is returned in {:attribute, {:date, fs}}
 defmodule Arfficionado do
@@ -10,21 +9,21 @@ defmodule Arfficionado do
   ```
   {:ok, instances} =
     File.stream!("data.arff")
-    |> Arfficionado.read(Arfficionado.ListHandler, [])
+    |> Arfficionado.read(Arfficionado.ListHandler)
   ```
 
   Current limitations:
   - ISO-8601 is the only supported `date` format
   - no support for attributes of type `relational`
+  - no support for sparse format
   """
 
   @doc ~s"""
   Parses an enumerable/stream of ARFF lines, invokes handler callbacks and returns final handler state.
 
-  Modifies `initial_handler_state` through invocations of `handler` callbacks.
+  Initializes handler state by invoking `init(arg)` and then modifies the state through invocations of the other `handler` callbacks.
   Returns `{:ok, final_handler_state}` or `{:error, reason, final_handler_state}`. 
 
-  The handler callback `Arfficionado.Handler:close/1` is called in both cases.
 
 
   ## Examples
@@ -56,7 +55,7 @@ defmodule Arfficionado do
       ...>   ~s[3.1415, 'What\\\\'s up?', red       % escaped '],
       ...>   ~s[4,      abc,           blue, {7}  % instance weight 7] 
       ...> ] |>
-      ...> Arfficionado.read(Arfficionado.ListHandler, [])
+      ...> Arfficionado.read(Arfficionado.ListHandler)
       {:ok, [
         {[1, "Hello", :red], 1},
         {[2, "Hi there!", :blue], 1},
@@ -65,9 +64,11 @@ defmodule Arfficionado do
         {[4, "abc", :blue], 7}
       ]}
   """
-  @spec read(Enumerable.t(), Arfficionado.Handler.t(), Arfficionado.Handler.state()) ::
+  @spec read(Enumerable.t(), Arfficionado.Handler.t(), any()) ::
           {:ok, Arfficionado.Handler.state()} | {:error, String.t(), Arfficionado.Handler.state()}
-  def read(arff, handler, initial_handler_state) do
+  def read(arff, handler, arg \\ nil) do
+    initial_handler_state = handler.init(arg)
+
     case Enum.reduce_while(
            arff,
            {handler, initial_handler_state, {:"@relation", [], 1}},

@@ -1,9 +1,12 @@
 defmodule OptionalCallbacksTest do
   use ExUnit.Case
-  import Arfficionado, only: [read: 3]
+  import Arfficionado, only: [read: 2]
 
   defmodule Recorder do
     @behaviour Arfficionado.Handler
+
+    @impl Handler
+    def init(_), do: []
 
     @impl Handler
     def line_comment(comment, state), do: {:cont, [{:line_comment, comment} | state]}
@@ -55,6 +58,6 @@ defmodule OptionalCallbacksTest do
 
     stream
     |> IO.binstream(:line)
-    |> read(Recorder, [])
+    |> read(Recorder)
   end
 end

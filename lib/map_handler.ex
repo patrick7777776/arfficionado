@@ -3,6 +3,10 @@ defmodule Arfficionado.MapHandler do
   @behaviour Handler
 
   @impl Handler
+  def init(nil), do: {nil, []}
+  def init(instances) when is_list(instances), do: {instances, []}
+
+  @impl Handler
   def attributes(attributes, {_, instances}) do
     keys = 
       attributes

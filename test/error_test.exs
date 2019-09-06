@@ -1,10 +1,13 @@
 defmodule ErrorTest do
   use ExUnit.Case
-  import Arfficionado, only: [read: 3]
+  import Arfficionado, only: [read: 2]
 
   defmodule ETHandler do
     alias Arfficionado.Handler
     @behaviour Handler
+
+    @impl Handler
+    def init(state), do: state
 
     @impl Handler
     def attributes(_attributes, state), do: {:cont, state}
@@ -299,6 +302,6 @@ defmodule ErrorTest do
 
     stream
     |> IO.binstream(:line)
-    |> read(ETHandler, nil)
+    |> read(ETHandler)
   end
 end

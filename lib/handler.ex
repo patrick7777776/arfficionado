@@ -3,6 +3,7 @@ defmodule Arfficionado.Handler do
   Handler behaviour. Implement as per your application's requirements (for example, including side effects such as creating and writing to an ETS table).
   """
   # TODO: provide a date-parsing function so we don't need to pull in any libaries...
+  # The handler callback `Arfficionado.Handler:close/1` is called in both cases.
 
   @typedoc """
   Arfficionado.Handler type.
@@ -68,6 +69,11 @@ defmodule Arfficionado.Handler do
   Name for an attribute/relation.
   """
   @type name :: String.t()
+
+  @doc """
+  Creates initial state from given argument.
+  """
+  @callback init(any()) :: state()
 
   @doc """
   Invoked when a line is encountered that contains nothing but a comment.

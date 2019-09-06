@@ -1,11 +1,17 @@
 # rename?!?!
 defmodule Arfficionado.ListHandler do
   @moduledoc """
-  Trivial example handler module that collects a list of `{instance, weight}` tuples, where instance is a list of values (corresponding to the attributes defined in the ARFF header) and weight is an integer. Use `[]` as the initial state.
+  Trivial example handler module that collects a list of `{instance, weight}` tuples, where instance is a list of values (corresponding to the attributes defined in the ARFF header) and weight is an integer. 
   """
 
   alias Arfficionado.Handler
   @behaviour Handler
+
+  @impl Handler
+  @doc """
+  Produces initial state, ignores given argument.
+  """
+  def init(_), do: []
 
   @impl Handler
   @doc """
