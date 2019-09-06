@@ -70,6 +70,11 @@ defmodule Arfficionado.Handler do
   """
   @type name :: String.t()
 
+  @typedoc """
+  Success/failure indicator.
+  """
+  @type status() :: :ok | :error
+
   @doc """
   Creates initial state from given argument.
   """
@@ -107,7 +112,7 @@ defmodule Arfficionado.Handler do
 
   # TODO: pass success | failure to the close call
   @doc """
-  Invoked when the input has been exhausted or an error has been encountered.
+  Invoked when the processing has finished. The first argument indicates whether processing was successful (`:ok`) or an error was encountered (`:error`).
   """
-  @callback close(state()) :: state()
+  @callback close(status(), state()) :: state()
 end

@@ -24,5 +24,5 @@ defmodule Arfficionado.MapHandler do
   end
 
   @impl Handler
-  def close({_keys, instances}), do: Enum.reverse(instances)
+  def close(_, {_keys, instances}), do: Enum.reverse(instances)
 end

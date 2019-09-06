@@ -16,7 +16,8 @@ defmodule ErrorTest do
     def instance(_values, _weight, _comment, state), do: {:cont, state}
 
     @impl Handler
-    def close(_state), do: :closed
+    def close(:error, _state), do: :closed
+    def close(_, _state), do: :status_should_have_been_error
   end
 
   test "@relation expected" do

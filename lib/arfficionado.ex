@@ -76,16 +76,16 @@ defmodule Arfficionado do
            &process_line/2
          ) do
       {_, {:error, reason, handler_state}, {_, _, line_number}} ->
-        final_state = handler.close(handler_state)
+        final_state = handler.close(:error, handler_state)
         {:error, ~s"Line #{line_number}: #{reason}", final_state}
 
       {_, handler_state, {stage, _, line_number}} when stage != :instance ->
-        final_state = handler.close(handler_state)
+        final_state = handler.close(:error, handler_state)
         # error msg assembly somewhat duplicated
         {:error, ~s"Line #{line_number}: Expected #{Atom.to_string(stage)}.", final_state}
 
       {_, handler_state, _} ->
-        final_state = handler.close(handler_state)
+        final_state = handler.close(:ok, handler_state)
         {:ok, final_state}
     end
   end

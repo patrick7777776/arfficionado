@@ -29,5 +29,5 @@ defmodule Arfficionado.ListHandler do
   @doc """
   Returns the collected instances. 
   """
-  def close(instances), do: Enum.reverse(instances)
+  def close(_, instances), do: Enum.reverse(instances)
 end

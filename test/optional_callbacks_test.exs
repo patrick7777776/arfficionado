@@ -25,7 +25,7 @@ defmodule OptionalCallbacksTest do
       do: {:cont, [{:instance, values, weight, comment} | state]}
 
     @impl Handler
-    def close(state), do: Enum.reverse(state)
+    def close(_, state), do: Enum.reverse(state)
   end
 
   test "comments are reported and optional callbacks are invoked" do
