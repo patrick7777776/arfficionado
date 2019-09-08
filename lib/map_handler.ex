@@ -1,12 +1,20 @@
 defmodule Arfficionado.MapHandler do
+  @moduledoc """
+  Example handler module that collects a list of `{instance, weight}` tuples, where instance is a map of attribute-value pairs (corresponding to the attributes defined in the ARFF header) and weight is an integer. 
+  """
   alias Arfficionado.Handler
   @behaviour Handler
 
   @impl Handler
-  def init(nil), do: {nil, []}
-  def init(instances) when is_list(instances), do: {instances, []}
+  @doc """
+  Produces initial state, ignores given argument.
+  """
+  def init(_), do: {nil, []}
 
   @impl Handler
+  @doc """
+  Extracts the attribute names and stores them in the upated state.
+  """
   def attributes(attributes, {_, instances}) do
     keys = 
       attributes
@@ -16,6 +24,9 @@ defmodule Arfficionado.MapHandler do
   end
 
   @impl Handler
+  @doc """
+  Converts the instance into a map of attribute-value pairs, and stores it and its instance weight in the updated state.
+  """
   def instance(values, weight, _comment, {keys, instances}) do
     instance = 
       Enum.zip(keys, values)
@@ -24,5 +35,8 @@ defmodule Arfficionado.MapHandler do
   end
 
   @impl Handler
+  @doc """
+  Returns the list of `{instance, weight}`-tuples accumulated.
+  """
   def close(_, {_keys, instances}), do: Enum.reverse(instances)
 end

@@ -1,3 +1,4 @@
+  # TODO: provide a date-parsing function so we don't need to pull in any libaries...
 defmodule Arfficionado.Handler do
   @moduledoc """
   Handler behaviour. 
@@ -20,8 +21,6 @@ defmodule Arfficionado.Handler do
   
   Implement this behaviour as per your application's requirements (for example, including side effects such as creating and writing to an ETS table). The sources for `Arfficionado.ListHandler` and `Arfficionado.MapHandler` may provide some general guidance. 
   """
-  # TODO: provide a date-parsing function so we don't need to pull in any libaries...
-  # The handler callback `Arfficionado.Handler:close/1` is called in both cases.
 
   @typedoc """
   Arfficionado.Handler type.
