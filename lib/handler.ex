@@ -1,6 +1,24 @@
 defmodule Arfficionado.Handler do
   @moduledoc """
-  Handler behaviour. Implement as per your application's requirements (for example, including side effects such as creating and writing to an ETS table). The sources for `Arfficionado.ListHandler` and `Arfficionado.MapHandler` may provide some general guidance. 
+  Handler behaviour. 
+  
+  `Arfficionado.read/3` will: 
+  1. call `init(arg)` to obtain the initial handler state (`arg` defaults to `nil`)
+  2. parse the ARFF header and
+     - call `relation` with the relation name and optional comment
+     - call `attributes` with the list of attributes found in the header
+     - call `line_comment` for lines that consists of commentary only
+     - call `begin_data` with optional comment to indicate that the header is finished and instance data will follow
+  3. parse the ARFF data section
+    - call `instance` for each line of data, reporting instance values, weight and optional comment
+    - call `line_comment` for lines that consists of commentary only
+  4. call `close`
+  
+  `Arfficionado.read/3` will pass in the current handler state on each callback invocation. Callback functions return an updated handler state and generally indicate whether to continue reading the ARFF file or to stop early.
+
+  Once the ARFF file is exhausted, an error is encountered in the ARFF file, or the handler has indicated that it wishes to stop the processing, the `close` callback will be invoked, allowing the handler to create the final result state (and clean up resources).
+  
+  Implement this behaviour as per your application's requirements (for example, including side effects such as creating and writing to an ETS table). The sources for `Arfficionado.ListHandler` and `Arfficionado.MapHandler` may provide some general guidance. 
   """
   # TODO: provide a date-parsing function so we don't need to pull in any libaries...
   # The handler callback `Arfficionado.Handler:close/1` is called in both cases.
