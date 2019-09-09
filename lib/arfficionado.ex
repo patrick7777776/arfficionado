@@ -270,6 +270,8 @@ defmodule Arfficionado do
   @doc false
   def parse([:line_break]), do: :empty_line
 
+  def parse([:open_curly | _rest]), do: {:error, "Sparse format is not currently supported."}
+
   def parse([{:comment, _comment} = comment]), do: comment
 
   def parse([{:string, <<c::utf8, _::binary>> = s} | rest]) when c == ?@ do

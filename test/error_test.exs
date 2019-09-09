@@ -307,6 +307,18 @@ defmodule ErrorTest do
            """) == {:error, "Line 2: Attribute type relational is not currently supported.", :closed}
   end
 
+  test "sparse format not supported (yet)" do
+    assert read(~s"""
+           @relation sparse
+           @attribute a numeric
+           @attribute b numeric
+           @attribute c numeric
+           @data
+           {1 1, 3 3}
+           {2 2, 3 3}
+           """) == {:error, "Line 6: Sparse format is not currently supported.", :closed}
+  end
+
   # non-iso 8601 date format: reject for now
 
   defp read(s) do
