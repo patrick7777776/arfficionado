@@ -70,25 +70,24 @@ defmodule Arfficionado do
 
     case Enum.reduce_while(
            arff,
-           {handler, initial_handler_state, :"@relation", [], 1},
+           {handler, initial_handler_state, :"@relation", [], parse_date, 1},
            &process_line/2
          ) do
-      {_, {:error, reason, handler_state}, _, _, line_number} ->
+      {_, {:error, reason, handler_state}, _, _, _, line_number} ->
         final_state = handler.close(:error, handler_state)
         {:error, ~s"Line #{line_number}: #{reason}", final_state}
 
-      {_, handler_state, stage, _, line_number} when stage != :instance ->
+      {_, handler_state, stage, _, _, line_number} when stage != :instance ->
         final_state = handler.close(:error, handler_state)
         {:error, ~s"Line #{line_number}: Expected #{Atom.to_string(stage)}.", final_state}
 
-      {_, handler_state, _, _, _} ->
+      {_, handler_state, _, _, _, _} ->
         final_state = handler.close(:ok, handler_state)
         {:ok, final_state}
     end
   end
 
-  # could be (line, {handler, handler_state}, {stage,atts,lineno}=internal_state})
-  defp process_line(line, {handler, handler_state, stage, attributes, line_number}) do
+  defp process_line(line, {handler, handler_state, stage, attributes, date_parse, line_number}) do
     parsed =
       line
       |> tokenize()
@@ -158,7 +157,7 @@ defmodule Arfficionado do
           end
 
         {:raw_instance, _, _, _} = ri when stage == :instance ->
-          case cast(ri, attributes) do
+          case cast(ri, attributes, date_parse) do
             {:error, reason} ->
               halt_with_error(reason, handler, handler_state, {:halt, attributes, line_number})
 
@@ -179,7 +178,7 @@ defmodule Arfficionado do
           )
       end
 
-      {cont_or_halt, {handler, updated_handler_state, updated_stage, updated_attributes, updated_line_number} }
+      {cont_or_halt, {handler, updated_handler_state, updated_stage, updated_attributes, date_parse, updated_line_number} }
   end
 
   # TODO: flatten internal state argument...
@@ -188,40 +187,40 @@ defmodule Arfficionado do
   end
 
   @doc false
-  def cast({:raw_instance, raw_values, weight, comment}, attributes) do
-    case cv(raw_values, attributes, []) do
+  def cast({:raw_instance, raw_values, weight, comment}, attributes, date_parse) do
+    case cv(raw_values, attributes, [], date_parse) do
       {:error, _reason} = err -> err
       cast_values -> {:instance, cast_values, weight, comment}
     end
   end
 
-  defp cv([], [], acc), do: Enum.reverse(acc)
+  defp cv([], [], acc, _), do: Enum.reverse(acc)
 
-  defp cv([v | vs], [a | as], acc) do
-    case c(v, a) do
+  defp cv([v | vs], [a | as], acc, date_parse) do
+    case c(v, a, date_parse) do
       {:error, _reason} = err ->
         err
 
       cast_value ->
-        cv(vs, as, [cast_value | acc])
+        cv(vs, as, [cast_value | acc], date_parse)
     end
   end
 
-  defp cv([_v | _vs], [], _), do: {:error, "More values than attributes."}
-  defp cv([], [_a | _as], _), do: {:error, "Fewer values than attributes."}
+  defp cv([_v | _vs], [], _, _), do: {:error, "More values than attributes."}
+  defp cv([], [_a | _as], _, _), do: {:error, "Fewer values than attributes."}
 
-  defp c({:unclosed_quote, quoted}, {:attribute, name, _, _}),
+  defp c({:unclosed_quote, quoted}, {:attribute, name, _, _}, _),
     do: {:error, ~s"#{quoted} is missing closing quote for attribute #{name}."}
 
-  defp c(:missing, _), do: :missing
+  defp c(:missing, _, _), do: :missing
 
-  defp c("." <> v, {:attribute, _, :numeric, _} = att),
-       do: c("0." <> v, att)
+  defp c("." <> v, {:attribute, _, :numeric, _} = att, date_parse),
+       do: c("0." <> v, att, date_parse)
 
-  defp c("-." <> v, {:attribute, _, :numeric, _} = att),
-       do: c("-0." <> v, att)
+  defp c("-." <> v, {:attribute, _, :numeric, _} = att, date_parse),
+       do: c("-0." <> v, att, date_parse)
 
-  defp c(v, {:attribute, name, :numeric, _}) do
+  defp c(v, {:attribute, name, :numeric, _}, _) do
     case Integer.parse(v) do
       {i, ""} ->
         i
@@ -244,7 +243,7 @@ defmodule Arfficionado do
   end
 
   # could use a set here instead of a list....
-  defp c(v, {:attribute, name, {:nominal, enum}, _}) do
+  defp c(v, {:attribute, name, {:nominal, enum}, _}, _) do
     if v in enum do
       String.to_atom(v)
     else
@@ -252,9 +251,9 @@ defmodule Arfficionado do
     end
   end
 
-  defp c(v, {:attribute, _, :string, _}), do: v
+  defp c(v, {:attribute, _, :string, _}, _), do: v
 
-  defp c(v, {:attribute, name, {:date, :iso_8601}, _}) do
+  defp c(v, {:attribute, name, {:date, :iso_8601}, _}, _) do
     case DateTime.from_iso8601(v) do
       {:ok, dt, _} ->
         dt
@@ -264,7 +263,8 @@ defmodule Arfficionado do
     end
   end
 
-  defp c(v, {:attribute, name, {:date, custom_format}, _}) do
+  defp c(v, {:attribute, name, {:date, custom_format}, _}, date_parse) do
+    #TODO: call date_parse
     {:error, "Attribute #{name}: date format #{custom_format} not supported; please pass a custom date parsing function."}
   end
 
