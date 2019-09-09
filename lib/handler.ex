@@ -3,7 +3,7 @@ defmodule Arfficionado.Handler do
   @moduledoc """
   Handler behaviour. 
   
-  `Arfficionado.read/3` will: 
+  `Arfficionado.read/4` will: 
   1. call `init(arg)` to obtain the initial handler state (`arg` defaults to `nil`)
   2. parse the ARFF header and
      - call `relation` with the relation name and optional comment
@@ -15,7 +15,7 @@ defmodule Arfficionado.Handler do
     - call `line_comment` for lines that consists of commentary only
   4. call `close`
   
-  `Arfficionado.read/3` will pass in the current handler state on each callback invocation. Callback functions return an updated handler state and generally indicate whether to continue reading the ARFF file or to stop early.
+  `Arfficionado.read/4` will pass in the current handler state on each callback invocation. Callback functions return an updated handler state and generally indicate whether to continue reading the ARFF file or to stop early.
 
   Once the ARFF file is exhausted, an error is encountered in the ARFF file, or the handler has indicated that it wishes to stop the processing, the `close` callback will be invoked, allowing the handler to create the final result state (and clean up resources).
   

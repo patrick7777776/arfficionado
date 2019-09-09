@@ -11,16 +11,20 @@ defmodule Arfficionado do
   ```
 
   Current limitations:
-  - ISO-8601 is the only supported `date` format
-  - no support for attributes of type `relational`
+  - ISO-8601 is the only supported `date` format, but you can pass a custom date parsing function to read other formats
+  - no support for attributes of type `relational` (not widely used)
   - no support for sparse format
   """
 
   @doc ~s"""
-  Parses an enumerable/stream of ARFF lines, invokes handler callbacks and returns final handler state.
+  Parses an enumerable/stream of ARFF lines, invokes `Arfficionado.Handler` callbacks and returns final handler state.
 
-  Initializes handler state by invoking `init(arg)` and then modifies the state through invocations of the other `handler` callbacks.
+  Initializes handler state by invoking `init(arg)` and then modifies the state through invocations of the other `handler` callbacks. 
+
   Returns `{:ok, final_handler_state}` or `{:error, reason, final_handler_state}`. 
+
+  A custom date parsing function can be given via `parse_date`. This function is expected to take two strings: a `date` and a `date_format` and to return either a `DateTime` or `{:error, reason}`. The default `parse_date` function will return `{:error, "Please pass in a function for parsing non-iso_8601 dates."}`.
+
 
 
 
@@ -264,8 +268,11 @@ defmodule Arfficionado do
   end
 
   defp c(v, {:attribute, name, {:date, custom_format}, _}, date_parse) do
-    #TODO: call date_parse
-    {:error, "Attribute #{name}: date format #{custom_format} not supported; please pass a custom date parsing function."}
+    case date_parse.(v, custom_format) do
+      {:error, reason} ->
+        {:error, ~s"Attribute #{name} / #{custom_format}: #{reason}"}
+      date -> date
+    end
   end
 
   @doc false

@@ -45,11 +45,20 @@ defmodule CastTest do
              {:error, "Cannot cast a to integer/real for attribute name."}
   end
 
-  test "cast custom date format" do
+  test "cast custom date format -- no custom parsing function given" do
     assert cast({:raw_instance, ["20190502"], 1, nil}, [{:attribute, "funky_date", {:date, "yyyymmdd"}, nil}], &Arfficionado.custom_date_parse/2
-    ) == {:error, "Attribute funky_date: date format yyyymmdd not supported; please pass a custom date parsing function."}
+    ) == {:error, "Attribute funky_date / yyyymmdd: Please pass in a function for parsing non-iso_8601 dates."}
   end
 
-  # TODO: now the same but with a custom parsing function...
+  
+  test "cast custom date format -- custom parsing function given" do
+    assert cast({:raw_instance, ["20190502"], 1, nil}, [{:attribute, "funky_date", {:date, "yyyymmdd"}, nil}], fn _, _ -> DateTime.from_unix(1234567890) |> elem(1) end
+    ) == {:instance, [DateTime.from_unix(1234567890) |> elem(1)], 1, nil}
+  end
+
+  test "cast custom date format -- custom parsing function returning error" do
+    assert cast({:raw_instance, ["not_a_date"], 1, nil}, [{:attribute, "funky_date", {:date, "yyyymmdd"}, nil}], fn _, _ -> {:error, "Could not parse: not_a_date"} end
+    ) == {:error, "Attribute funky_date / yyyymmdd: Could not parse: not_a_date"}
+  end
 
 end
