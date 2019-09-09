@@ -38,4 +38,11 @@ defmodule CastTest do
     assert cast({:raw_instance, ["a"], 2, nil}, [{:attribute, "name", :numeric, nil}]) ==
              {:error, "Cannot cast a to integer/real for attribute name."}
   end
+
+  test "cast custom date format" do
+    assert cast({:raw_instance, ["20190502"], 1, nil}, [{:attribute, "funky_date", {:date, "yyyymmdd"}, nil}]) == {:error, "Attribute funky_date: date format yyyymmdd not supported; please pass a custom date parsing function."}
+  end
+
+  # TODO: now the same but with a custom parsing function...
+
 end

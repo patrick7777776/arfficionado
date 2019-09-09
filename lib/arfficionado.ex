@@ -265,6 +265,10 @@ defmodule Arfficionado do
     end
   end
 
+  defp c(v, {:attribute, name, {:date, custom_format}, _}) do
+    {:error, "Attribute #{name}: date format #{custom_format} not supported; please pass a custom date parsing function."}
+  end
+
   # TODO: need a clause for custom dates; either error or call a user-defined function
 
   @doc false
@@ -368,7 +372,8 @@ defmodule Arfficionado do
     # TODO: find way to reduce this duplication
     case parse_optional_comment(rest) do
       {:error, _reason} = err -> err
-      comment -> {:attribute, name, {:date, format}, comment}
+      comment -> 
+        {:attribute, name, {:date, format}, comment}
     end
   end
 
