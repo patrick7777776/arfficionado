@@ -304,7 +304,8 @@ defmodule ErrorTest do
            @end relex
            @data
            1 hello
-           """) == {:error, "Line 2: Attribute type relational is not currently supported.", :closed}
+           """) ==
+             {:error, "Line 2: Attribute type relational is not currently supported.", :closed}
   end
 
   test "sparse format not supported (yet)" do

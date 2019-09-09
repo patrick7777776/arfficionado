@@ -19,7 +19,10 @@ defmodule ParseTest do
 
   test "@attribute numeric/real/integer" do
     assert p("@attribute name numeric\n") == {:attribute, "name", :numeric, nil}
-    assert p("@attribute name real % get real\n") == {:attribute, "name", :numeric, "% get real\n"}
+
+    assert p("@attribute name real % get real\n") ==
+             {:attribute, "name", :numeric, "% get real\n"}
+
     assert p("@attribute name integer\n") == {:attribute, "name", :numeric, nil}
   end
 

@@ -1,4 +1,4 @@
-#add date to example?
+# add date to example?
 defmodule Arfficionado do
   @moduledoc """
   Reader for [ARFF (Attribute Relation File Format)](https://waikato.github.io/weka-wiki/arff/) data.
@@ -69,7 +69,7 @@ defmodule Arfficionado do
   @spec read(Enumerable.t(), Arfficionado.Handler.t(), any()) ::
           {:ok, Arfficionado.Handler.state()} | {:error, String.t(), Arfficionado.Handler.state()}
   def read(arff, handler, arg \\ nil, parse_date \\ &custom_date_parse/2) do
-    #TODO: pass down the parse_date function...
+    # TODO: pass down the parse_date function...
     initial_handler_state = handler.init(arg)
 
     case Enum.reduce_while(
@@ -120,15 +120,20 @@ defmodule Arfficionado do
 
         {:attribute, name, :relational, _comment} = attribute
         when stage == :"@attribute" or stage == :"@attribute or @data" ->
-          halt_with_error("Attribute type relational is not currently supported.", handler, handler_state, {:halt, attributes, line_number})
-          # rough outline for handling relational attributes:
-          #   set stage=:"@attribute or @end"
-          #   accumulate sub attributes until @end is encountered
-          # parsing/casting will need to be adapted, too
+          halt_with_error(
+            "Attribute type relational is not currently supported.",
+            handler,
+            handler_state,
+            {:halt, attributes, line_number}
+          )
+
+        # rough outline for handling relational attributes:
+        #   set stage=:"@attribute or @end"
+        #   accumulate sub attributes until @end is encountered
+        # parsing/casting will need to be adapted, too
 
         {:attribute, name, _type, _comment} = attribute
         when stage == :"@attribute" or stage == :"@attribute or @data" ->
-
           # TODO: make this check more clear and efficient; sort out that internal state... header_finished is not needed anymore; maybe use a map
           if Enum.find(attributes, false, fn {:attribute, an, _, _} -> an == name end) do
             halt_with_error(
@@ -138,7 +143,8 @@ defmodule Arfficionado do
               {:halt, attributes, line_number}
             )
           else
-            {:cont, handler_state, :"@attribute or @data", [attribute | attributes], line_number + 1}
+            {:cont, handler_state, :"@attribute or @data", [attribute | attributes],
+             line_number + 1}
           end
 
         {:data, comment} when length(attributes) > 0 and stage == :"@attribute or @data" ->
@@ -182,7 +188,9 @@ defmodule Arfficionado do
           )
       end
 
-      {cont_or_halt, {handler, updated_handler_state, updated_stage, updated_attributes, date_parse, updated_line_number} }
+    {cont_or_halt,
+     {handler, updated_handler_state, updated_stage, updated_attributes, date_parse,
+      updated_line_number}}
   end
 
   # TODO: flatten internal state argument...
@@ -219,10 +227,10 @@ defmodule Arfficionado do
   defp c(:missing, _, _), do: :missing
 
   defp c("." <> v, {:attribute, _, :numeric, _} = att, date_parse),
-       do: c("0." <> v, att, date_parse)
+    do: c("0." <> v, att, date_parse)
 
   defp c("-." <> v, {:attribute, _, :numeric, _} = att, date_parse),
-       do: c("-0." <> v, att, date_parse)
+    do: c("-0." <> v, att, date_parse)
 
   defp c(v, {:attribute, name, :numeric, _}, _) do
     case Integer.parse(v) do
@@ -271,7 +279,9 @@ defmodule Arfficionado do
     case date_parse.(v, custom_format) do
       {:error, reason} ->
         {:error, ~s"Attribute #{name} / #{custom_format}: #{reason}"}
-      date -> date
+
+      date ->
+        date
     end
   end
 
@@ -348,6 +358,7 @@ defmodule Arfficionado do
           {:error, _reason} = err -> err
           comment -> {:attribute, name, :relational, comment}
         end
+
         # this needs to be reflected in the main loop's state, i.e. accumulated sub-attributes & await 'end'
     end
   end
@@ -380,8 +391,10 @@ defmodule Arfficionado do
   defp parse_date([{:string, format} | rest], name) do
     # TODO: find way to reduce this duplication
     case parse_optional_comment(rest) do
-      {:error, _reason} = err -> err
-      comment -> 
+      {:error, _reason} = err ->
+        err
+
+      comment ->
         {:attribute, name, {:date, format}, comment}
     end
   end

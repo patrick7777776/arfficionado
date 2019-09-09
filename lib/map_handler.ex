@@ -16,10 +16,11 @@ defmodule Arfficionado.MapHandler do
   Extracts the attribute names and stores them in the upated state.
   """
   def attributes(attributes, {_, instances}) do
-    keys = 
+    keys =
       attributes
       |> Enum.map(fn {:attribute, name, _type, _comment} -> name end)
       |> Enum.map(fn name -> String.to_atom(name) end)
+
     {:cont, {keys, instances}}
   end
 
@@ -28,9 +29,10 @@ defmodule Arfficionado.MapHandler do
   Converts the instance into a map of attribute-value pairs, and stores it and its instance weight in the updated state.
   """
   def instance(values, weight, _comment, {keys, instances}) do
-    instance = 
+    instance =
       Enum.zip(keys, values)
       |> Enum.into(%{})
+
     {:cont, {keys, [{instance, weight} | instances]}}
   end
 
