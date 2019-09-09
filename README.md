@@ -1,6 +1,7 @@
 # Arfficionado
 
-**TODO: Add description**
+Elixir reader for ARFF data sets (Attribute Relation File Format);
+[HexDocs](https://hexdocs.pm/arfficionado).
 
 ## Installation
 
@@ -15,7 +16,4 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/arfficionado](https://hexdocs.pm/arfficionado).
 
