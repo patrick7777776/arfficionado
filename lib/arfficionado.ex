@@ -212,16 +212,13 @@ defmodule Arfficionado do
 
   defp c(:missing, _), do: :missing
 
-  defp c("." <> v, {:attribute, _, type, _} = att)
-       when type == :integer or type == :real or type == :numeric,
+  defp c("." <> v, {:attribute, _, :numeric, _} = att),
        do: c("0." <> v, att)
 
-  defp c("-." <> v, {:attribute, _, type, _} = att)
-       when type == :integer or type == :real or type == :numeric,
+  defp c("-." <> v, {:attribute, _, :numeric, _} = att),
        do: c("-0." <> v, att)
 
-  defp c(v, {:attribute, name, type, _})
-       when type == :integer or type == :real or type == :numeric do
+  defp c(v, {:attribute, name, :numeric, _}) do
     case Integer.parse(v) do
       {i, ""} ->
         i
@@ -309,23 +306,11 @@ defmodule Arfficionado do
 
   defp parse_attribute([{:string, name}, {:string, type} | rest]) do
     case String.downcase(type) do
-      "numeric" ->
+      n when n in ["integer", "real", "numeric"] ->
         # TODO: try to get rid of the repeated case {:error, reason} blocks
         case parse_optional_comment(rest) do
           {:error, _reason} = err -> err
           comment -> {:attribute, name, :numeric, comment}
-        end
-
-      "real" ->
-        case parse_optional_comment(rest) do
-          {:error, _reason} = err -> err
-          comment -> {:attribute, name, :real, comment}
-        end
-
-      "integer" ->
-        case parse_optional_comment(rest) do
-          {:error, _reason} = err -> err
-          comment -> {:attribute, name, :integer, comment}
         end
 
       "string" ->

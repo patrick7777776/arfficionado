@@ -1,4 +1,6 @@
 #TODO: is target always the last? if so, return the target attribute name as well as the list of maps!
+# -- ok, convention is that target/class is last;
+# -- but for flexibility, we ought to return [attname-type] info, too!!!
 defmodule Arfficionado.MapHandler do
   @moduledoc """
   Example handler module that collects a list of `{instance, weight}` tuples, where instance is a map of attribute-value pairs (corresponding to the attributes defined in the ARFF header) and weight is an integer. 

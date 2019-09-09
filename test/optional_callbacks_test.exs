@@ -44,8 +44,8 @@ defmodule OptionalCallbacksTest do
                 {:relation, "foo", "% comment\n"},
                 {:attributes,
                  [
-                   {:attribute, "a1", :integer, "% comment\n"},
-                   {:attribute, "a2", :integer, "% comment\n"}
+                   {:attribute, "a1", :numeric, "% comment\n"},
+                   {:attribute, "a2", :numeric, "% comment\n"}
                  ]},
                 {:begin_data, "% comment\n"},
                 {:instance, [1, 2], 1, "% comment\n"},

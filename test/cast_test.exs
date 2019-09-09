@@ -3,8 +3,7 @@ defmodule CastTest do
   import Arfficionado, only: [cast: 2]
 
   @attributes [
-    {:attribute, "name", :integer, nil},
-    {:attribute, "name", :real, nil},
+    {:attribute, "name", :numeric, nil},
     {:attribute, "name", :numeric, nil},
     {:attribute, "name", {:nominal, ["yes", "no", "MAYBE?!"]}, nil},
     {:attribute, "name", :string, nil},
@@ -16,17 +15,17 @@ defmodule CastTest do
 
     assert cast(
              {:raw_instance,
-              ["1", "1.23", "4.5", "yes", "Blah blah blah!", "2019-08-28T11:23:18Z"], 1, nil},
+              ["1", "1.23", "yes", "Blah blah blah!", "2019-08-28T11:23:18Z"], 1, nil},
              @attributes
-           ) == {:instance, [1, 1.23, 4.5, :yes, "Blah blah blah!", dt], 1, nil}
+           ) == {:instance, [1, 1.23, :yes, "Blah blah blah!", dt], 1, nil}
   end
 
   test "cast missing" do
     assert cast(
-             {:raw_instance, [:missing, :missing, :missing, :missing, :missing, :missing], 7,
+             {:raw_instance, [:missing, :missing, :missing, :missing, :missing], 7,
               nil},
              @attributes
-           ) == {:instance, [:missing, :missing, :missing, :missing, :missing, :missing], 7, nil}
+           ) == {:instance, [:missing, :missing, :missing, :missing, :missing], 7, nil}
   end
 
   test "cast unexpected nominal value" do

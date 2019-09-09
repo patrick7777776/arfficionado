@@ -75,7 +75,7 @@ defmodule Arfficionado.Handler do
   @typedoc """
   Attribute type.
   """
-  @type attribute_type() :: :integer | :real | :numeric | {:nominal, list(atom())} | :string | {:date, date_format()}
+  @type attribute_type() :: :numeric | {:nominal, list(atom())} | :string | {:date, date_format()}
 
   @typedoc """
   Date format.
