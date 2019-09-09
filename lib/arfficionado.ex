@@ -69,7 +69,6 @@ defmodule Arfficionado do
   @spec read(Enumerable.t(), Arfficionado.Handler.t(), any()) ::
           {:ok, Arfficionado.Handler.state()} | {:error, String.t(), Arfficionado.Handler.state()}
   def read(arff, handler, arg \\ nil, parse_date \\ &custom_date_parse/2) do
-    # TODO: pass down the parse_date function...
     initial_handler_state = handler.init(arg)
 
     case Enum.reduce_while(

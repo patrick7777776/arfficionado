@@ -1,4 +1,3 @@
-# TODO: provide a date-parsing function so we don't need to pull in any libaries...
 defmodule Arfficionado.Handler do
   @moduledoc """
   Handler behaviour. 
@@ -127,7 +126,6 @@ defmodule Arfficionado.Handler do
   """
   @callback instance(values(), weight(), optional_comment(), state()) :: updated_state()
 
-  # TODO: pass success | failure to the close call
   @doc """
   Invoked when the processing has finished. The first argument indicates whether processing was successful (`:ok`) or an error was encountered (`:error`).
   """
