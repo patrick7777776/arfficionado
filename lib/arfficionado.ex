@@ -79,7 +79,6 @@ defmodule Arfficionado do
 
       {_, handler_state, {stage, _, line_number}} when stage != :instance ->
         final_state = handler.close(:error, handler_state)
-        # error msg assembly somewhat duplicated
         {:error, ~s"Line #{line_number}: Expected #{Atom.to_string(stage)}.", final_state}
 
       {_, handler_state, _} ->
@@ -120,9 +119,10 @@ defmodule Arfficionado do
         {:attribute, name, :relational, _comment} = attribute
         when stage == :"@attribute" or stage == :"@attribute or @data" ->
           halt_with_error("Attribute type relational is not currently supported.", handler, handler_state, {:halt, attributes, line_number})
-          # TODO: handle relational attributes!!!!
-          # if type == relational, then set stage=:"@attribute or @end"
-          # accumulate sub attributes until @end is encountered
+          # rough outline for handling relational attributes:
+          #   set stage=:"@attribute or @end"
+          #   accumulate sub attributes until @end is encountered
+          # parsing/casting will need to be adapted, too
 
         {:attribute, name, _type, _comment} = attribute
         when stage == :"@attribute" or stage == :"@attribute or @data" ->
