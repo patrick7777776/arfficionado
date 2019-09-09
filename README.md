@@ -5,7 +5,7 @@ Elixir reader for ARFF data sets (Attribute Relation File Format);
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
+The package can be installed
 by adding `arfficionado` to your list of dependencies in `mix.exs`:
 
 ```elixir
