@@ -1,4 +1,3 @@
-# TODO: map integer, real to numeric and just have numeric in {:attribute, ...}
 # TODO: test that date format string is returned in {:attribute, {:date, fs}}
 # TODO: add callback for date parsing...?!?!?
 defmodule Arfficionado do
@@ -118,9 +117,15 @@ defmodule Arfficionado do
             {:cont, handler_state, {:"@attribute", attributes, line_number + 1}}
           end
 
+        {:attribute, name, :relational, _comment} = attribute
+        when stage == :"@attribute" or stage == :"@attribute or @data" ->
+          halt_with_error("Attribute type relational is not currently supported.", handler, handler_state, {:halt, attributes, line_number})
+          # TODO: handle relational attributes!!!!
+          # if type == relational, then set stage=:"@attribute or @end"
+          # accumulate sub attributes until @end is encountered
+
         {:attribute, name, _type, _comment} = attribute
         when stage == :"@attribute" or stage == :"@attribute or @data" ->
-          # TODO: handle relational attributes!!!!
 
           # TODO: make this check more clear and efficient; sort out that internal state... header_finished is not needed anymore; maybe use a map
           if Enum.find(attributes, false, fn {:attribute, an, _, _} -> an == name end) do
@@ -180,7 +185,6 @@ defmodule Arfficionado do
   end
 
   defp halt_with_error(reason, _handler, handler_state, internal_state) do
-    # TODO: add report_error function to handler, call it .. or .. add flag to close
     {:halt, {:error, reason, handler_state}, internal_state}
   end
 
@@ -261,6 +265,8 @@ defmodule Arfficionado do
     end
   end
 
+  # TODO: need a clause for custom dates; either error or call a user-defined function
+
   @doc false
   def parse([:line_break]), do: :empty_line
 
@@ -327,6 +333,7 @@ defmodule Arfficionado do
           {:error, _reason} = err -> err
           comment -> {:attribute, name, :relational, comment}
         end
+        # this needs to be reflected in the main loop's state, i.e. accumulated sub-attributes & await 'end'
     end
   end
 

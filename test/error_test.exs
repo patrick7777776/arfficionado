@@ -295,8 +295,19 @@ defmodule ErrorTest do
            """) == {:error, "Line 3: Duplicate attribute name a1.", :closed}
   end
 
+  test "header: relational attributes not supported (yet)" do
+    assert read(~s"""
+           @relation relational
+           @attribute relex relational
+             @attribute a numeric
+             @attribute b numeric
+           @end relex
+           @data
+           1 hello
+           """) == {:error, "Line 2: Attribute type relational is not currently supported.", :closed}
+  end
+
   # non-iso 8601 date format: reject for now
-  # @randomstring
 
   defp read(s) do
     {:ok, stream} = StringIO.open(s)
