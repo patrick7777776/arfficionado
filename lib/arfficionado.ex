@@ -1,5 +1,4 @@
-# TODO: test that date format string is returned in {:attribute, {:date, fs}}
-# TODO: add callback for date parsing...?!?!?
+#add date to example?
 defmodule Arfficionado do
   @moduledoc """
   Reader for [ARFF (Attribute Relation File Format)](https://waikato.github.io/weka-wiki/arff/) data.
@@ -65,55 +64,55 @@ defmodule Arfficionado do
   """
   @spec read(Enumerable.t(), Arfficionado.Handler.t(), any()) ::
           {:ok, Arfficionado.Handler.state()} | {:error, String.t(), Arfficionado.Handler.state()}
-  def read(arff, handler, arg \\ nil) do
+  def read(arff, handler, arg \\ nil, parse_date \\ &custom_date_parse/2) do
+    #TODO: pass down the parse_date function...
     initial_handler_state = handler.init(arg)
 
     case Enum.reduce_while(
            arff,
-           {handler, initial_handler_state, {:"@relation", [], 1}},
+           {handler, initial_handler_state, :"@relation", [], 1},
            &process_line/2
          ) do
-      {_, {:error, reason, handler_state}, {_, _, line_number}} ->
+      {_, {:error, reason, handler_state}, _, _, line_number} ->
         final_state = handler.close(:error, handler_state)
         {:error, ~s"Line #{line_number}: #{reason}", final_state}
 
-      {_, handler_state, {stage, _, line_number}} when stage != :instance ->
+      {_, handler_state, stage, _, line_number} when stage != :instance ->
         final_state = handler.close(:error, handler_state)
         {:error, ~s"Line #{line_number}: Expected #{Atom.to_string(stage)}.", final_state}
 
-      {_, handler_state, _} ->
+      {_, handler_state, _, _, _} ->
         final_state = handler.close(:ok, handler_state)
         {:ok, final_state}
     end
   end
 
   # could be (line, {handler, handler_state}, {stage,atts,lineno}=internal_state})
-  defp process_line(line, {handler, handler_state, {stage, attributes, line_number}}) do
+  defp process_line(line, {handler, handler_state, stage, attributes, line_number}) do
     parsed =
       line
       |> tokenize()
       |> parse()
 
-    # could change this shape to make the updating/return clauses easier to assemble
-    {cont_or_halt, updated_handler_state, updated_internal_state} =
+    {cont_or_halt, updated_handler_state, updated_stage, updated_attributes, updated_line_number} =
       case parsed do
         :empty_line ->
-          {:cont, handler_state, {stage, attributes, line_number + 1}}
+          {:cont, handler_state, stage, attributes, line_number + 1}
 
         {:comment, comment} ->
           if function_exported?(handler, :line_comment, 2) do
             {coh, uhs} = handler.line_comment(comment, handler_state)
-            {coh, uhs, {stage, attributes, line_number + 1}}
+            {coh, uhs, stage, attributes, line_number + 1}
           else
-            {:cont, handler_state, {stage, attributes, line_number + 1}}
+            {:cont, handler_state, stage, attributes, line_number + 1}
           end
 
         {:relation, name, comment} when stage == :"@relation" ->
           if function_exported?(handler, :relation, 3) do
             {coh, uhs} = handler.relation(name, comment, handler_state)
-            {coh, uhs, {:"@attribute", attributes, line_number + 1}}
+            {coh, uhs, :"@attribute", attributes, line_number + 1}
           else
-            {:cont, handler_state, {:"@attribute", attributes, line_number + 1}}
+            {:cont, handler_state, :"@attribute", attributes, line_number + 1}
           end
 
         {:attribute, name, :relational, _comment} = attribute
@@ -136,8 +135,7 @@ defmodule Arfficionado do
               {:halt, attributes, line_number}
             )
           else
-            {:cont, handler_state,
-             {:"@attribute or @data", [attribute | attributes], line_number + 1}}
+            {:cont, handler_state, :"@attribute or @data", [attribute | attributes], line_number + 1}
           end
 
         {:data, comment} when length(attributes) > 0 and stage == :"@attribute or @data" ->
@@ -148,14 +146,14 @@ defmodule Arfficionado do
 
           case cont_or_halt do
             :halt ->
-              {:halt, updated_handler_state, {:halt, finished_attributes, line_number + 1}}
+              {:halt, updated_handler_state, :halt, finished_attributes, line_number + 1}
 
             :cont ->
               if function_exported?(handler, :begin_data, 2) do
                 {coh, uhs} = handler.begin_data(comment, updated_handler_state)
-                {coh, uhs, {:instance, finished_attributes, line_number + 1}}
+                {coh, uhs, :instance, finished_attributes, line_number + 1}
               else
-                {:cont, updated_handler_state, {:instance, finished_attributes, line_number + 1}}
+                {:cont, updated_handler_state, :instance, finished_attributes, line_number + 1}
               end
           end
 
@@ -166,7 +164,7 @@ defmodule Arfficionado do
 
             {:instance, values, weight, comment} ->
               {coh, uhs} = handler.instance(values, weight, comment, handler_state)
-              {coh, uhs, {:instance, attributes, line_number + 1}}
+              {coh, uhs, :instance, attributes, line_number + 1}
           end
 
         {:error, reason} ->
@@ -181,11 +179,12 @@ defmodule Arfficionado do
           )
       end
 
-    {cont_or_halt, {handler, updated_handler_state, updated_internal_state}}
+      {cont_or_halt, {handler, updated_handler_state, updated_stage, updated_attributes, updated_line_number} }
   end
 
-  defp halt_with_error(reason, _handler, handler_state, internal_state) do
-    {:halt, {:error, reason, handler_state}, internal_state}
+  # TODO: flatten internal state argument...
+  defp halt_with_error(reason, _handler, handler_state, {stage, attributes, line_number}) do
+    {:halt, {:error, reason, handler_state}, stage, attributes, line_number}
   end
 
   @doc false
@@ -269,7 +268,10 @@ defmodule Arfficionado do
     {:error, "Attribute #{name}: date format #{custom_format} not supported; please pass a custom date parsing function."}
   end
 
-  # TODO: need a clause for custom dates; either error or call a user-defined function
+  @doc false
+  def custom_date_parse(d, format) do
+    {:error, "Please pass in a function for parsing non-iso_8601 dates."}
+  end
 
   @doc false
   def parse([:line_break]), do: :empty_line
